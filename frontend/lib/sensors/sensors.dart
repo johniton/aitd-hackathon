@@ -9,6 +9,8 @@ export 'financial/transaction_sensor_service.dart';
 
 // 3. Digital: BatteryManager + NetworkStatsManager → kWh → kg CO₂e
 export 'digital/device_footprint_service.dart';
+export 'digital/grid_intensity_service.dart';
+
 
 // Privacy: local-vs-cloud boundary policy table
 export 'privacy/privacy_config.dart';

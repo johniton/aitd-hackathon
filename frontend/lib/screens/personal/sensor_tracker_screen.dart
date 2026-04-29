@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'dart:math';
+import 'dart:math' show pi;
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../sensors/sensors.dart';
+import '../../config/app_config.dart';
 
 // ── Sensor state model ───────────────────────────────────────────────────────
 
@@ -49,31 +50,17 @@ class SensorTrackerScreen extends StatefulWidget {
 class _SensorTrackerScreenState extends State<SensorTrackerScreen>
     with TickerProviderStateMixin {
   final _state = _SensorState();
-  final _rng = Random();
 
   late MotionActivityService _motionService;
-  late TransactionSensorService _txService;
   late DeviceFootprintService _deviceService;
 
   late AnimationController _pulseController;
   late AnimationController _ringController;
   late Animation<double> _ringAnim;
 
-  Timer? _digitalTicker;
-  Timer? _txTicker;
   Timer? _gridTicker;
 
-  // Simulated transaction feed
-  static const _sampleTransactions = [
-    (5541, 'Shell Garage', 48.50),
-    (5812, 'Nandos', 22.00),
-    (4511, 'Ryanair', 189.99),
-    (5411, 'Tesco Express', 34.20),
-    (4121, 'Uber', 12.80),
-    (5999, 'Amazon', 67.00),
-    (4900, 'British Gas', 95.00),
-    (5814, 'McDonalds', 8.50),
-  ];
+
 
   @override
   void initState() {
@@ -110,38 +97,8 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
     );
     _motionService.start();
 
-    // Inject simulated transport ticks every 6 s for demo visibility
-    Timer.periodic(const Duration(seconds: 6), (_) {
-      if (!mounted) return;
-      final modes = [
-        TransportMode.automotive,
-        TransportMode.automotive,
-        TransportMode.cycling,
-        TransportMode.stationary,
-      ];
-      final mode = modes[_rng.nextInt(modes.length)];
-      final dist = 0.3 + _rng.nextDouble() * 1.5;
-      const factors = {
-        TransportMode.automotive: 0.171,
-        TransportMode.cycling: 0.0,
-        TransportMode.stationary: 0.0,
-        TransportMode.walking: 0.0,
-        TransportMode.unknown: 0.0,
-      };
-      final kg = (factors[mode] ?? 0) * dist;
-      setState(() {
-        _state.transportMode = mode;
-        _state.transportDistanceKm += dist;
-        _state.transportKgToday += kg;
-        _state.transportHistory = [
-          ..._state.transportHistory.skip(1),
-          kg.clamp(0, 5),
-        ];
-      });
-    });
-
     // ── Financial service ────────────────────────────────────────────────────
-    _txService = TransactionSensorService(
+    TransactionSensorService(
       onCarbonLogged: (log) {
         if (!mounted) return;
         setState(() {
@@ -158,26 +115,13 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
       },
     );
 
-    // Fire a random simulated transaction every 9 s
-    _txTicker = Timer.periodic(const Duration(seconds: 9), (_) {
-      if (!mounted) return;
-      final t = _sampleTransactions[_rng.nextInt(_sampleTransactions.length)];
-      _txService.ingestWebhookPayload(PlaidTransaction(
-        transactionId: 'sim-${DateTime.now().millisecondsSinceEpoch}',
-        merchantCategoryCode: t.$1,
-        merchantName: t.$2,
-        amountUsd: t.$3,
-        authorizedAt: DateTime.now(),
-      ));
-    });
-
     // ── Digital service ──────────────────────────────────────────────────────
     _deviceService = DeviceFootprintService(
       onFootprintCalculated: (result) {
         if (!mounted) return;
         setState(() {
           _state.batteryDelta = result.batteryEnergyKwh;
-          _state.networkGb += _state.networkGb;
+          _state.networkGb += result.networkBytes / (1024 * 1024 * 1024);
           _state.digitalKgToday += result.kgCo2e;
           _state.digitalHistory = [
             ..._state.digitalHistory.skip(1),
@@ -187,48 +131,29 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
       },
     );
 
-    // Tick every 8 s with randomised OS readings
-    _digitalTicker = Timer.periodic(const Duration(seconds: 8), (_) {
+    _deviceService.start();
+
+    // ── Grid Intensity ───────────────────────────────────────────────────────
+    final gridService = GridIntensityService(apiKey: AppConfig.electricityMapsApiKey);
+    _gridTicker = Timer.periodic(const Duration(minutes: 15), (timer) async {
+      final intensity = await gridService.fetchIntensity();
       if (!mounted) return;
-      final snap = DeviceUsageSnapshot(
-        bytesTransferred: {
-          NetworkInterface.wifi:
-              (_rng.nextDouble() * 200 * 1024 * 1024).roundToDouble(),
-          NetworkInterface.cellular4g:
-              (_rng.nextDouble() * 50 * 1024 * 1024).roundToDouble(),
-          NetworkInterface.cellular5g: 0,
-        },
-        batteryDelta: 0.005 + _rng.nextDouble() * 0.015,
-        batteryCapacityWh: 16.65,
-        gridIntensityGramsPerKwh: _state.gridIntensity,
-        windowStart: DateTime.now().subtract(const Duration(seconds: 8)),
-        windowEnd: DateTime.now(),
-      );
-      _deviceService.calculate(snap);
       setState(() {
-        _state.networkGb += (snap.bytesTransferred.values
-                .fold(0.0, (a, b) => a + b)) /
-            (1024 * 1024 * 1024);
+        _state.gridIntensity = intensity;
       });
     });
-
-    // Drift grid intensity to simulate Electricity Maps live feed
-    _gridTicker = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (!mounted) return;
-      setState(() {
-        _state.gridIntensity =
-            (350 + _rng.nextDouble() * 200).clamp(200, 600);
-      });
+    // Initial fetch
+    gridService.fetchIntensity().then((val) {
+      if (mounted) setState(() => _state.gridIntensity = val);
     });
   }
+
 
   @override
   void dispose() {
     _motionService.stop();
     _pulseController.dispose();
     _ringController.dispose();
-    _digitalTicker?.cancel();
-    _txTicker?.cancel();
     _gridTicker?.cancel();
     super.dispose();
   }

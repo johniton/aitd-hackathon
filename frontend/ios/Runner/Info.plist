@@ -45,5 +45,12 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSMotionUsageDescription</key>
+	<string>This app needs access to motion sensors to automatically track your transport mode and calculate carbon emissions.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app needs access to your location to calculate distance travelled and local grid carbon intensity.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>This app needs background location access to track trips even when the screen is off.</string>
 </dict>
 </plist>
+

@@ -1,11 +1,6 @@
-// Transport Automation — Sensor-Based
-// Bridges CMMotionActivityManager (iOS) / Activity Recognition Client (Android)
-// to a carbon API. Runs via BGTaskScheduler / WorkManager in the background.
-// No continuous GPS: coarse cell-tower location is used until a high-velocity
-// "Start" event from the accelerometer triggers the high-accuracy GPS lock.
-
 import 'dart:async';
-import 'dart:math' show sqrt;
+import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
+import 'package:geolocator/geolocator.dart' hide ActivityType;
 
 /// Detected movement mode reported by the OS motion subsystem.
 enum TransportMode { stationary, walking, cycling, automotive, unknown }
@@ -15,8 +10,7 @@ class MotionActivity {
   final TransportMode mode;
   final DateTime timestamp;
 
-  /// Confidence 0–100 as returned by the OS (maps CMMotionActivityConfidence /
-  /// ActivityRecognitionResult confidence integers to the same scale).
+  /// Confidence 0–100 as returned by the OS.
   final int confidence;
 
   const MotionActivity({
@@ -31,7 +25,7 @@ class TransportCarbonEstimate {
   /// kg CO₂e for the trip segment
   final double kgCo2e;
 
-  /// Distance driven/cycled in km (derived from coarse location delta)
+  /// Distance driven/cycled in km
   final double distanceKm;
   final TransportMode mode;
   final DateTime calculatedAt;
@@ -56,12 +50,6 @@ const Map<TransportMode, double> _kgCo2ePerKm = {
 
 /// Polls the OS motion subsystem, detects state transitions, and calculates
 /// CO₂ for each automotive / cycling segment automatically.
-///
-/// On iOS wire up to [CMMotionActivityManager.startActivityUpdates].
-/// On Android register an [ActivityRecognitionClient] PendingIntent that
-/// delivers updates to this service via a BroadcastReceiver / WorkRequest.
-///
-/// Call [start] once from your BGTaskScheduler / WorkManager task handler.
 class MotionActivityService {
   MotionActivityService({
     required this.onCarbonEstimate,
@@ -80,56 +68,71 @@ class MotionActivityService {
 
   MotionActivity? _previousActivity;
   DateTime? _segmentStart;
+  Position? _previousPosition;
   double _accumulatedDistanceKm = 0.0;
 
-  // Simulated fixed-interval accelerometer magnitude from platform channel.
-  // Replace with a real MethodChannel / EventChannel in production integration.
-  final StreamController<MotionActivity> _activityStream =
-      StreamController.broadcast();
-  StreamSubscription<MotionActivity>? _subscription;
-  Timer? _simulationTimer;
+  StreamSubscription<Activity>? _subscription;
 
   /// Start listening to OS activity updates.
-  void start() {
-    _subscription = _activityStream.stream.listen(_handleActivity);
-    _startSimulatedPlatformFeed(); // Remove in production; wire real channel here.
+  Future<void> start() async {
+    // Request permissions
+    bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    LocationPermission permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) return;
+    }
+
+    _subscription = FlutterActivityRecognition.instance.activityStream.listen((activity) {
+      final motionActivity = _mapToMotionActivity(activity);
+      _handleActivity(motionActivity);
+    });
   }
 
   /// Stop all monitoring and release resources.
   void stop() {
-    _simulationTimer?.cancel();
     _subscription?.cancel();
-    _activityStream.close();
   }
 
-  /// Feed a real OS activity event into the service (call from MethodChannel handler).
-  void ingestActivity(MotionActivity activity) {
-    if (!_activityStream.isClosed) _activityStream.add(activity);
-  }
-
-  void _handleActivity(MotionActivity activity) {
+  void _handleActivity(MotionActivity activity) async {
     if (activity.confidence < minimumConfidence) return;
 
     final previous = _previousActivity;
 
     // State transition detected — close out previous segment.
     if (previous != null && previous.mode != activity.mode) {
-      _closeSegment(previous.mode, activity.timestamp);
+      await _closeSegment(previous.mode, activity.timestamp);
     }
 
     // Start tracking a new segment if we entered a carbon-relevant mode.
     if (_shouldTrack(activity.mode)) {
       _segmentStart ??= activity.timestamp;
-      // Accumulate coarse distance from cell-tower / geofence deltas.
-      // In production this comes from a low-power FusedLocationProviderClient
-      // (Android) or CLLocationManager desiredAccuracy=kCLLocationAccuracyKilometer (iOS).
-      _accumulatedDistanceKm += _coarseDistanceDeltaKm();
+      
+      // Update distance
+      final currentPosition = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+      );
+      
+      if (_previousPosition != null) {
+        final distance = Geolocator.distanceBetween(
+          _previousPosition!.latitude,
+          _previousPosition!.longitude,
+          currentPosition.latitude,
+          currentPosition.longitude,
+        );
+        _accumulatedDistanceKm += distance / 1000.0;
+      }
+      _previousPosition = currentPosition;
+    } else {
+      _previousPosition = null; // Reset position when stationary/walking
     }
 
     _previousActivity = activity;
   }
 
-  void _closeSegment(TransportMode mode, DateTime endTime) {
+  Future<void> _closeSegment(TransportMode mode, DateTime endTime) async {
     if (_segmentStart == null) return;
     if (_accumulatedDistanceKm < minimumDistanceKm) {
       _reset();
@@ -153,34 +156,29 @@ class MotionActivityService {
   void _reset() {
     _segmentStart = null;
     _accumulatedDistanceKm = 0.0;
+    _previousPosition = null;
   }
 
-  // ── Simulation shim ───────────────────────────────────────────────────────
-  // Replaces the real MethodChannel / EventChannel for local development.
-  // Emits a plausible commute: stationary → automotive → stationary.
-  int _simStep = 0;
-  static const _simSequence = [
-    TransportMode.stationary,
-    TransportMode.automotive,
-    TransportMode.automotive,
-    TransportMode.automotive,
-    TransportMode.stationary,
-  ];
+  MotionActivity _mapToMotionActivity(Activity activity) {
+    TransportMode mode = switch (activity.type) {
+      ActivityType.STILL => TransportMode.stationary,
+      ActivityType.WALKING || ActivityType.RUNNING => TransportMode.walking,
+      ActivityType.ON_BICYCLE => TransportMode.cycling,
+      ActivityType.IN_VEHICLE => TransportMode.automotive,
+      _ => TransportMode.unknown,
+    };
 
-  double _coarseDistanceDeltaKm() {
-    // Simulates ~0.8 km per 30-second polling tick at city speed.
-    return 0.8 + (sqrt(_simStep + 1) * 0.05);
-  }
+    int confidence = switch (activity.confidence) {
+      ActivityConfidence.HIGH => 100,
+      ActivityConfidence.MEDIUM => 50,
+      ActivityConfidence.LOW => 25,
+    };
 
-  void _startSimulatedPlatformFeed() {
-    _simulationTimer = Timer.periodic(const Duration(seconds: 30), (_) {
-      if (_simStep >= _simSequence.length) _simStep = 0;
-      ingestActivity(MotionActivity(
-        mode: _simSequence[_simStep],
-        timestamp: DateTime.now(),
-        confidence: 90,
-      ));
-      _simStep++;
-    });
+    return MotionActivity(
+      mode: mode,
+      timestamp: DateTime.now(),
+      confidence: confidence,
+    );
   }
 }
+
