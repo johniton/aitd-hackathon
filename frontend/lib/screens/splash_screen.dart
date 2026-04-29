@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../theme/app_theme.dart';
+import '../services/auth_service.dart';
+import 'auth_screen.dart';
 import 'mode_select_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -27,10 +29,16 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     _controller.forward().then((_) async {
       await Future.delayed(const Duration(milliseconds: 800));
       if (mounted) {
+        final destination = AuthService.isLoggedIn
+            ? const ModeSelectScreen()
+            : const AuthScreen();
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const ModeSelectScreen(),
-            transitionsBuilder: (context, anim, secondaryAnimation, child) => FadeTransition(opacity: anim, child: child),
+            pageBuilder: (context, animation, secondaryAnimation) =>
+                destination,
+            transitionsBuilder:
+                (context, anim, secondaryAnimation, child) =>
+                    FadeTransition(opacity: anim, child: child),
             transitionDuration: const Duration(milliseconds: 600),
           ),
         );

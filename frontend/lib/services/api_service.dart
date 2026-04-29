@@ -1,18 +1,28 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 
 import '../models/user_model.dart';
 import '../models/activity_model.dart';
 import '../models/business_model.dart';
+import 'auth_service.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000/api/v1';
-  static const String devUserId = 'u1'; // Priya Naik
+  // Override with: flutter run --dart-define=API_BASE_URL=http://<host>:8000/api/v1
+  static final String baseUrl = (() {
+    const configuredBaseUrl = String.fromEnvironment('API_BASE_URL');
+    if (configuredBaseUrl.isNotEmpty) return configuredBaseUrl;
+    return kIsWeb ? 'http://127.0.0.1:8000/api/v1' : 'http://10.0.2.2:8000/api/v1';
+  })();
 
-  static Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'X-Dev-User-Id': devUserId,
-      };
+  static Map<String, String> get _headers {
+    final token = AuthService.accessToken;
+    if (token == null) throw Exception('Not authenticated — please sign in.');
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    };
+  }
 
   // ---------------------------------------------------------------------------
   // USERS

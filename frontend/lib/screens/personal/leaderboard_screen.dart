@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
+import '../../services/auth_service.dart';
 import '../../models/user_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
@@ -110,7 +111,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   delegate: SliverChildBuilderDelegate(
                     (_, i) {
                       final user = rest[i];
-                      final isMe = user.id == ApiService.devUserId;
+                      final isMe = user.id == AuthService.userId;
                       return Padding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                         child: GlassCard(
