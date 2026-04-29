@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/activity_model.dart';
 import '../models/user_model.dart';
 import '../models/house_item_model.dart';
+import '../services/carbon_api.dart';
 import 'static_data.dart';
 import 'emission_factors.dart';
 
@@ -11,6 +12,8 @@ class AppState extends ChangeNotifier {
   final List<HouseItemModel> _shopItems = List.from(shopItems);
   final List<double> _weekly = List.from(weeklyData);
   String? _smartTip;
+  List<ApiSuggestion> _lastSuggestions = [];
+  bool _backendOnline = false;
 
   AppState() {
     _user = currentUser;
@@ -22,6 +25,8 @@ class AppState extends ChangeNotifier {
   List<HouseItemModel> get shop => List.unmodifiable(_shopItems);
   List<double> get weekly => List.unmodifiable(_weekly);
   String? get smartTip => _smartTip;
+  List<ApiSuggestion> get lastSuggestions => List.unmodifiable(_lastSuggestions);
+  bool get backendOnline => _backendOnline;
 
   List<HouseItemModel> get purchased =>
       _shopItems.where((i) => i.purchased).toList();
@@ -31,6 +36,10 @@ class AppState extends ChangeNotifier {
     required ActivityCategory category,
     required double co2Kg,
     required bool isSaving,
+    // Optional for backend: if provided, fires API call and updates carbon from server
+    String? apiCategory,
+    String? apiType,
+    double? apiValue,
   }) {
     final analogy = EmissionFactors.analogy(co2Kg);
     final coins = co2Kg == 0 ? 20 : 5;
@@ -45,11 +54,9 @@ class AppState extends ChangeNotifier {
     );
     _activities.insert(0, activity);
 
-    // Update today's weekly bar
-    final weekday = DateTime.now().weekday - 1; // 0=Mon
+    final weekday = DateTime.now().weekday - 1;
     _weekly[weekday] = _weekly[weekday] + (isSaving ? co2Kg : 0);
 
-    // Update user coins + saved
     final newCoins = _user.greenCoins + coins;
     final newSaved = isSaving ? _user.totalCo2Saved + co2Kg : _user.totalCo2Saved;
     _user = UserModel(
@@ -65,6 +72,36 @@ class AppState extends ChangeNotifier {
 
     _refreshSmartTip();
     notifyListeners();
+
+    // Fire API in background if category/type provided; update suggestions on response
+    if (apiCategory != null && apiType != null) {
+      CarbonApi.logActivity(
+        userId: _user.id,
+        category: apiCategory,
+        type: apiType,
+        value: apiValue ?? co2Kg,
+      ).then((result) {
+        if (result != null) {
+          _backendOnline = true;
+          _lastSuggestions = result.suggestions;
+          // If backend carbon differs meaningfully, correct the local record
+          final idx = _activities.indexWhere((a) => a.id == activity.id);
+          if (idx != -1 && (result.carbonKg - co2Kg).abs() > 0.001) {
+            final corrected = ActivityModel(
+              id: activity.id,
+              title: activity.title,
+              category: activity.category,
+              co2Kg: result.carbonKg,
+              isSaving: result.carbonKg == 0,
+              timestamp: activity.timestamp,
+              analogy: EmissionFactors.analogy(result.carbonKg),
+            );
+            _activities[idx] = corrected;
+          }
+          notifyListeners();
+        }
+      });
+    }
   }
 
   bool buyItem(String itemId) {

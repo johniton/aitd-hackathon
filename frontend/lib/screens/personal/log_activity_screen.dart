@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../data/app_state.dart';
 import '../../data/emission_factors.dart';
 import '../../models/activity_model.dart';
+import '../../services/carbon_api.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
@@ -195,6 +196,9 @@ class _LogActivityScreenState extends State<LogActivityScreen>
       category: ActivityCategory.transport,
       co2Kg: co2,
       isSaving: co2 == 0,
+      apiCategory: 'transport',
+      apiType: CarbonApi.mapTransport(_selectedTransport),
+      apiValue: _distanceKm,
     );
     _showConfirmation(context, co2 == 0 ? 20 : 5);
     setState(() {
@@ -353,11 +357,18 @@ class _LogActivityScreenState extends State<LogActivityScreen>
             label: 'Log  +${_co2Result == 0 ? 20 : 5} coins',
             onPressed: () {
               final cat = [ActivityCategory.transport, ActivityCategory.food, ActivityCategory.energy, ActivityCategory.waste][_selectedCategory];
+              final mapped = CarbonApi.mapActivity(
+                categoryIndex: _selectedCategory,
+                optionIndex: _selectedOption,
+              );
               context.read<AppState>().logActivity(
                 title: _options[_selectedOption],
                 category: cat,
                 co2Kg: _co2Result,
                 isSaving: _co2Result == 0 || [0, 1].contains(_selectedCategory) && _co2Result < 1.0,
+                apiCategory: mapped.category,
+                apiType: mapped.type,
+                apiValue: mapped.value,
               );
               _showConfirmation(context, _co2Result == 0 ? 20 : 5);
             },

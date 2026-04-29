@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static const Color bg1 = Color(0xFF0A0F0A);
-  static const Color bg2 = Color(0xFF0D1A0D);
-  static const Color emerald = Color(0xFF10B981);
-  static const Color lime = Color(0xFF84CC16);
-  static const Color cardBg = Color(0x1410B981);
-  static const Color warning = Color(0xFFEF4444);
-  static const Color textPrimary = Color(0xFFE2E8F0);
-  static const Color textSecondary = Color(0xFF94A3B8);
-  static const Color surface = Color(0xFF1A2E1A);
+  static const Color bg1 = Color(0xFF0F1A15);
+  static const Color bg2 = Color(0xFF122018);
+  static const Color emerald = Color(0xFF22C55E);
+  static const Color lime = Color(0xFF86EFAC);
+  static const Color cardBg = Color(0x1A22C55E);
+  static const Color warning = Color(0xFFF97316);
+  static const Color textPrimary = Color(0xFFE2F0E8);
+  static const Color textSecondary = Color(0xFF6B9E82);
+  static const Color surface = Color(0xFF162311);
 
   static ThemeData get dark {
     return ThemeData(
@@ -41,7 +41,7 @@ class AppTheme {
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: surface,
         selectedItemColor: emerald,
-        unselectedItemColor: textSecondary,
+        unselectedItemColor: Color(0xFF4B7A61),
         type: BottomNavigationBarType.fixed,
         elevation: 0,
       ),
@@ -52,7 +52,7 @@ class AppTheme {
       ),
       tabBarTheme: const TabBarThemeData(
         labelColor: emerald,
-        unselectedLabelColor: textSecondary,
+        unselectedLabelColor: Color(0xFF4B7A61),
         indicatorColor: emerald,
       ),
     );

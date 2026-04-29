@@ -167,6 +167,53 @@ class DashboardScreen extends StatelessWidget {
                   ),
                 ),
 
+              // Backend suggestions
+              if (state.lastSuggestions.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                    child: GlassCard(
+                      borderColor: AppTheme.emerald.withValues(alpha: 0.3),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Row(
+                            children: [
+                              Text('💡', style: TextStyle(fontSize: 16)),
+                              SizedBox(width: 8),
+                              Text('AI Suggestions', style: TextStyle(color: AppTheme.emerald, fontSize: 13, fontWeight: FontWeight.w700)),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          ...state.lastSuggestions.map((s) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Container(
+                                  margin: const EdgeInsets.only(top: 3),
+                                  width: 6, height: 6,
+                                  decoration: BoxDecoration(color: AppTheme.emerald, shape: BoxShape.circle),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(s.message, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
+                                      Text('Save ~${s.estimatedSavingsKg.toStringAsFixed(2)} kg CO₂', style: const TextStyle(color: AppTheme.emerald, fontSize: 11)),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+
               // Weekly chart
               SliverToBoxAdapter(
                 child: Padding(
