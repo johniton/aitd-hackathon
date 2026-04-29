@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/static_data.dart';
+import '../../services/api_service.dart';
 import '../../models/user_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
@@ -13,113 +13,163 @@ class LeaderboardScreen extends StatefulWidget {
 
 class _LeaderboardScreenState extends State<LeaderboardScreen> {
   bool _squadOnly = false;
+  List<UserModel> _leaderboard = [];
+  bool _isLoading = true;
+  String _error = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final data = await ApiService.getLeaderboard(limit: 20);
+      setState(() {
+        _leaderboard = data;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final topThree = leaderboard.take(3).toList();
-    final rest = leaderboard.skip(3).toList();
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.emerald)),
+      );
+    }
+
+    if (_error.isNotEmpty) {
+      return Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              TextButton(onPressed: _loadData, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final topThree = _leaderboard.take(3).toList();
+    final rest = _leaderboard.skip(3).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.bg1,
       body: Container(
         decoration: const BoxDecoration(gradient: AppTheme.bgGradient),
         child: SafeArea(
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
-                  child: Row(
-                    children: [
-                      const Expanded(
-                        child: Text('Leaderboard', style: TextStyle(color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w700)),
-                      ),
-                      GestureDetector(
-                        onTap: () => setState(() => _squadOnly = !_squadOnly),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-                          decoration: BoxDecoration(
-                            color: _squadOnly ? AppTheme.emerald.withValues(alpha: 0.2) : AppTheme.cardBg,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: _squadOnly ? AppTheme.emerald : AppTheme.emerald.withValues(alpha: 0.2)),
-                          ),
-                          child: Text('👥 Squad', style: TextStyle(color: _squadOnly ? AppTheme.emerald : AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+          child: RefreshIndicator(
+            onRefresh: _loadData,
+            color: AppTheme.emerald,
+            child: CustomScrollView(
+              slivers: [
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                    child: Row(
+                      children: [
+                        const Expanded(
+                          child: Text('Leaderboard', style: TextStyle(color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w700)),
                         ),
-                      ),
-                    ],
+                        GestureDetector(
+                          onTap: () => setState(() => _squadOnly = !_squadOnly),
+                          child: AnimatedContainer(
+                            duration: const Duration(milliseconds: 200),
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                            decoration: BoxDecoration(
+                              color: _squadOnly ? AppTheme.emerald.withValues(alpha: 0.2) : AppTheme.cardBg,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: _squadOnly ? AppTheme.emerald : AppTheme.emerald.withValues(alpha: 0.2)),
+                            ),
+                            child: Text('👥 Squad', style: TextStyle(color: _squadOnly ? AppTheme.emerald : AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(20),
-                  child: _Podium(topThree: topThree),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: _Podium(topThree: topThree),
+                  ),
                 ),
-              ),
-              SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (_, i) {
-                    final user = rest[i];
-                    final isMe = user.id == 'u1';
-                    return Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
-                      child: GlassCard(
-                        borderColor: isMe ? AppTheme.emerald.withValues(alpha: 0.5) : null,
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: 28,
-                              child: Text('#${user.rank}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w700)),
-                            ),
-                            _Avatar(initials: user.avatarInitials, size: 36),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      Text(user.name, style: TextStyle(color: isMe ? AppTheme.emerald : AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
-                                      if (isMe) ...[
-                                        const SizedBox(width: 6),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                          decoration: BoxDecoration(color: AppTheme.emerald.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
-                                          child: const Text('You', style: TextStyle(color: AppTheme.emerald, fontSize: 10)),
-                                        ),
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (_, i) {
+                      final user = rest[i];
+                      final isMe = user.id == ApiService.devUserId;
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                        child: GlassCard(
+                          borderColor: isMe ? AppTheme.emerald.withValues(alpha: 0.5) : null,
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 28,
+                                child: Text('#${user.rank}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, fontWeight: FontWeight.w700)),
+                              ),
+                              _Avatar(initials: user.avatarInitials, size: 36),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Text(user.name, style: TextStyle(color: isMe ? AppTheme.emerald : AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
+                                        if (isMe) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(color: AppTheme.emerald.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(6)),
+                                            child: const Text('You', style: TextStyle(color: AppTheme.emerald, fontSize: 10)),
+                                          ),
+                                        ],
                                       ],
-                                    ],
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Row(
-                                    children: [
-                                      Text('🔥 ${user.streakDays}d streak', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-                                      const SizedBox(width: 8),
-                                      Text('📍 ${user.city}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-                                    ],
-                                  ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        Text('🔥 ${user.streakDays}d streak', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                                        const SizedBox(width: 8),
+                                        Text('📍 ${user.city}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text('${user.totalCo2Saved.toStringAsFixed(0)} kg', style: const TextStyle(color: AppTheme.emerald, fontSize: 13, fontWeight: FontWeight.w700)),
+                                  Text('🪙 ${user.greenCoins.toInt()}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                                 ],
                               ),
-                            ),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text('${user.totalCo2Saved.toStringAsFixed(0)} kg', style: const TextStyle(color: AppTheme.emerald, fontSize: 13, fontWeight: FontWeight.w700)),
-                                Text('🪙 ${user.greenCoins.toInt()}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                    );
-                  },
-                  childCount: rest.length,
+                      );
+                    },
+                    childCount: rest.length,
+                  ),
                 ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 80)),
-            ],
+                const SliverToBoxAdapter(child: SizedBox(height: 80)),
+              ],
+            ),
           ),
         ),
       ),

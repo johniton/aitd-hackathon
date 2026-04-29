@@ -1,10 +1,19 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../../data/static_data.dart';
+import '../../services/api_service.dart';
 import '../../models/house_item_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
+
+final List<HouseItemModel> shopItems = [
+  const HouseItemModel(id: 'h1', name: 'Solar Roof', icon: '☀️', cost: 200, description: '-30% energy emissions'),
+  const HouseItemModel(id: 'h2', name: 'Rain Garden', icon: '🌿', cost: 150, description: 'Absorbs 5kg CO₂/month'),
+  const HouseItemModel(id: 'h3', name: 'EV Charger', icon: '⚡', cost: 300, description: 'Unlock EV transport logging'),
+  const HouseItemModel(id: 'h4', name: 'Rainwater Tank', icon: '💧', cost: 180, description: 'Save 500L water/month'),
+  const HouseItemModel(id: 'h5', name: 'Compost Bin', icon: '♻️', cost: 80, description: 'Double waste points', purchased: true),
+  const HouseItemModel(id: 'h6', name: 'Terrace Farm', icon: '🥦', cost: 220, description: 'Grow your own food'),
+];
 
 class HouseGameScreen extends StatefulWidget {
   const HouseGameScreen({super.key});
@@ -14,8 +23,11 @@ class HouseGameScreen extends StatefulWidget {
 }
 
 class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderStateMixin {
-  late List<HouseItemModel> _items;
-  late int _coins;
+  List<HouseItemModel> _items = [];
+  int _coins = 0;
+  bool _isLoading = true;
+  String _error = '';
+
   late AnimationController _celebrationController;
   late AnimationController _houseEntranceController;
   late Animation<double> _houseEntrance;
@@ -24,14 +36,36 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
   @override
   void initState() {
     super.initState();
-    _items = List.from(shopItems);
-    _coins = currentUser.greenCoins.toInt();
+    _loadData();
 
     _houseEntranceController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _houseEntrance = CurvedAnimation(parent: _houseEntranceController, curve: Curves.easeOutBack);
     _houseEntranceController.forward();
 
     _celebrationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final houseData = await ApiService.getHouse();
+      final purchasedList = (houseData['items'] as List)
+          .map((item) => HouseItemModel.fromJson(item))
+          .toList();
+
+      setState(() {
+        _coins = (houseData['coins'] as num).toInt();
+        _items = shopItems.map((staticItem) {
+          final isPurchased = purchasedList.any((p) => p.id == staticItem.id);
+          return staticItem.copyWith(purchased: isPurchased);
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -41,28 +75,60 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
     super.dispose();
   }
 
-  void _buy(int index) {
+  Future<void> _buy(int index) async {
     final item = _items[index];
     if (item.purchased || _coins < item.cost) return;
-    setState(() {
-      _items[index] = item.copyWith(purchased: true);
-      _coins -= item.cost;
-      _lastPurchasedIcon = item.icon;
-    });
-    _celebrationController.forward(from: 0);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppTheme.emerald,
-        content: Text('${item.icon} ${item.name} added to your eco home!'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+
+    try {
+      await ApiService.buyHouseItem(item.id);
+      if (!mounted) return;
+      setState(() {
+        _items[index] = item.copyWith(purchased: true);
+        _coins -= item.cost;
+        _lastPurchasedIcon = item.icon;
+      });
+      _celebrationController.forward(from: 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.emerald,
+          content: Text('${item.icon} ${item.name} added to your eco home!'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: Colors.red, content: Text('Purchase failed: $e')),
+      );
+    }
   }
 
   bool _has(String id) => _items.any((i) => i.id == id && i.purchased);
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.emerald)),
+      );
+    }
+
+    if (_error.isNotEmpty) {
+      return Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              TextButton(onPressed: _loadData, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.bg1,
       body: Container(

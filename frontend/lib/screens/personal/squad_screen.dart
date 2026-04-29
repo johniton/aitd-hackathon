@@ -1,16 +1,69 @@
 import 'package:flutter/material.dart';
-import '../../data/static_data.dart';
+import '../../services/api_service.dart';
+import '../../models/user_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
 
-class SquadScreen extends StatelessWidget {
+class SquadScreen extends StatefulWidget {
   const SquadScreen({super.key});
 
-  static final _squadMembers = leaderboard.take(4).toList();
+  @override
+  State<SquadScreen> createState() => _SquadScreenState();
+}
+
+class _SquadScreenState extends State<SquadScreen> {
+  bool _isLoading = true;
+  String _error = '';
+  List<UserModel> _squadMembers = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final leaderboard = await ApiService.getLeaderboard(limit: 4);
+      setState(() {
+        _squadMembers = leaderboard;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.emerald)),
+      );
+    }
+
+    if (_error.isNotEmpty) {
+      return Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              TextButton(onPressed: _loadData, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final totalSaved = _squadMembers.fold(0.0, (sum, u) => sum + u.totalCo2Saved);
+
     return Scaffold(
       backgroundColor: AppTheme.bg1,
       appBar: AppBar(
@@ -27,7 +80,7 @@ class SquadScreen extends StatelessWidget {
                 children: [
                   const Text('Squad CO₂ Saved', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                   const SizedBox(height: 8),
-                  const Text('588.7 kg', style: TextStyle(color: AppTheme.emerald, fontSize: 32, fontWeight: FontWeight.w800)),
+                  Text('${totalSaved.toStringAsFixed(1)} kg', style: const TextStyle(color: AppTheme.emerald, fontSize: 32, fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
                   const Text('Combined this month', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                 ],

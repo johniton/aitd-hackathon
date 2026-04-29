@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../data/emission_factors.dart';
+import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
@@ -220,15 +221,32 @@ class _LogActivityScreenState extends State<LogActivityScreen> with SingleTicker
             const SizedBox(height: 20),
             GradientButton(
               label: 'Log Activity  +${(_co2Values[_selectedOption] == 0 ? 20 : 5)} coins',
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    backgroundColor: AppTheme.emerald,
-                    content: Text('Logged! +${_co2Values[_selectedOption] == 0 ? 20 : 5} GreenCoins 🌱'),
-                    duration: const Duration(seconds: 2),
-                  ),
-                );
-                Navigator.pop(context);
+              onPressed: () async {
+                try {
+                  final categories = ['transport', 'food', 'energy', 'waste'];
+                  await ApiService.logActivity(
+                    _options[_selectedOption],
+                    categories[_selectedCategory],
+                    _co2Result,
+                    _co2Result == 0, // isSaving
+                  );
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        backgroundColor: AppTheme.emerald,
+                        content: Text('Logged! +${_co2Values[_selectedOption] == 0 ? 20 : 5} GreenCoins 🌱'),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                    Navigator.pop(context);
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(backgroundColor: Colors.red, content: Text('Error: $e')),
+                    );
+                  }
+                }
               },
               icon: Icons.check,
               width: double.infinity,

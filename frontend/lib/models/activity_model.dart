@@ -19,6 +19,21 @@ class ActivityModel {
     required this.analogy,
   });
 
+  factory ActivityModel.fromJson(Map<String, dynamic> json) {
+    return ActivityModel(
+      id: json['id'] as String,
+      title: json['title'] as String,
+      category: ActivityCategory.values.firstWhere(
+        (e) => e.name == json['category'],
+        orElse: () => ActivityCategory.transport,
+      ),
+      co2Kg: (json['co2_kg'] as num).toDouble(),
+      isSaving: json['is_saving'] as bool,
+      timestamp: DateTime.parse(json['logged_at'] as String),
+      analogy: json['analogy'] as String? ?? '',
+    );
+  }
+
   String get categoryIcon {
     switch (category) {
       case ActivityCategory.transport: return '🚲';

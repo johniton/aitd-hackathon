@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../data/static_data.dart';
+import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 
 class WrappedScreen extends StatefulWidget {
@@ -12,44 +12,67 @@ class WrappedScreen extends StatefulWidget {
 class _WrappedScreenState extends State<WrappedScreen> {
   final _controller = PageController();
   int _page = 0;
+  bool _isLoading = true;
+  String _error = '';
+  List<_WrappedPage> _pages = [];
 
-  static final _pages = [
-    _WrappedPage(
-      bg: const LinearGradient(colors: [Color(0xFF064E3B), Color(0xFF065F46)]),
-      emoji: '🌍',
-      headline: '${wrappedStats['co2Saved']} kg',
-      subtitle: 'of CO₂ saved\nthis year',
-      accent: AppTheme.emerald,
-    ),
-    _WrappedPage(
-      bg: const LinearGradient(colors: [Color(0xFF1A3A1A), Color(0xFF2D5A2D)]),
-      emoji: '🌳',
-      headline: '${wrappedStats['treesEquivalent']} trees',
-      subtitle: 'worth of carbon absorbed\nin 2025',
-      accent: AppTheme.lime,
-    ),
-    _WrappedPage(
-      bg: const LinearGradient(colors: [Color(0xFF1C1A0A), Color(0xFF3B3500)]),
-      emoji: '🏆',
-      headline: 'Top ${100 - (wrappedStats['percentile'] as int)}%',
-      subtitle: 'Most eco-conscious users\nin Goa',
-      accent: const Color(0xFFFACC15),
-    ),
-    _WrappedPage(
-      bg: const LinearGradient(colors: [Color(0xFF0A0F1A), Color(0xFF0D1A3A)]),
-      emoji: '🚲',
-      headline: '${wrappedStats['topCategory']}',
-      subtitle: 'Your greenest category\nthis year',
-      accent: const Color(0xFF60A5FA),
-    ),
-    _WrappedPage(
-      bg: const LinearGradient(colors: [Color(0xFF1A0A0F), Color(0xFF3A0D1A)]),
-      emoji: '🔥',
-      headline: '${wrappedStats['activitiesLogged']}',
-      subtitle: 'eco actions logged\nKeep it up!',
-      accent: const Color(0xFFF97316),
-    ),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final stats = await ApiService.getWrapped();
+      setState(() {
+
+        _pages = [
+          _WrappedPage(
+            bg: const LinearGradient(colors: [Color(0xFF064E3B), Color(0xFF065F46)]),
+            emoji: '🌍',
+            headline: '${stats['co2Saved']} kg',
+            subtitle: 'of CO₂ saved\nthis year',
+            accent: AppTheme.emerald,
+          ),
+          _WrappedPage(
+            bg: const LinearGradient(colors: [Color(0xFF1A3A1A), Color(0xFF2D5A2D)]),
+            emoji: '🌳',
+            headline: '${stats['treesEquivalent']} trees',
+            subtitle: 'worth of carbon absorbed\nin 2025',
+            accent: AppTheme.lime,
+          ),
+          _WrappedPage(
+            bg: const LinearGradient(colors: [Color(0xFF1C1A0A), Color(0xFF3B3500)]),
+            emoji: '🏆',
+            headline: 'Top ${100 - (stats['percentile'] as num).toInt()}%',
+            subtitle: 'Most eco-conscious users\nin Goa',
+            accent: const Color(0xFFFACC15),
+          ),
+          _WrappedPage(
+            bg: const LinearGradient(colors: [Color(0xFF0A0F1A), Color(0xFF0D1A3A)]),
+            emoji: '🚲',
+            headline: '${stats['topCategory']}',
+            subtitle: 'Your greenest category\nthis year',
+            accent: const Color(0xFF60A5FA),
+          ),
+          _WrappedPage(
+            bg: const LinearGradient(colors: [Color(0xFF1A0A0F), Color(0xFF3A0D1A)]),
+            emoji: '🔥',
+            headline: '${stats['activitiesLogged']}',
+            subtitle: 'eco actions logged\nKeep it up!',
+            accent: const Color(0xFFF97316),
+          ),
+        ];
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -59,6 +82,28 @@ class _WrappedScreenState extends State<WrappedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.emerald)),
+      );
+    }
+
+    if (_error.isNotEmpty) {
+      return Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              TextButton(onPressed: _loadData, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: Stack(
         children: [

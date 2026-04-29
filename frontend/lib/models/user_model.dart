@@ -18,4 +18,17 @@ class UserModel {
     required this.rank,
     required this.city,
   });
+
+  factory UserModel.fromJson(Map<String, dynamic> json) {
+    return UserModel(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      avatarInitials: json['avatar_initials'] as String,
+      greenCoins: (json['green_coins'] as num).toDouble(),
+      totalCo2Saved: (json['total_co2_saved'] as num).toDouble(),
+      streakDays: json['streak_days'] as int,
+      rank: json['rank'] as int? ?? 0,
+      city: json['city'] as String? ?? '',
+    );
+  }
 }

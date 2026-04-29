@@ -15,6 +15,17 @@ class HouseItemModel {
     this.purchased = false,
   });
 
+  factory HouseItemModel.fromJson(Map<String, dynamic> json) {
+    return HouseItemModel(
+      id: json['item_key'] as String? ?? '',
+      name: json['item_name'] as String? ?? '',
+      icon: '', // Backend doesn't store icon
+      cost: json['cost'] as int? ?? 0,
+      description: '', // Backend doesn't store description
+      purchased: true, // If it's returned by getHouse(), it's purchased
+    );
+  }
+
   HouseItemModel copyWith({bool? purchased}) {
     return HouseItemModel(
       id: id,

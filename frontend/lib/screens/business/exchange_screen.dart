@@ -1,14 +1,67 @@
 import 'package:flutter/material.dart';
-import '../../data/static_data.dart';
+import '../../services/api_service.dart';
+import '../../models/business_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
 
-class ExchangeScreen extends StatelessWidget {
+class ExchangeScreen extends StatefulWidget {
   const ExchangeScreen({super.key});
 
   @override
+  State<ExchangeScreen> createState() => _ExchangeScreenState();
+}
+
+class _ExchangeScreenState extends State<ExchangeScreen> {
+  bool _isLoading = true;
+  String _error = '';
+  List<ExchangeItem> _items = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final items = await ApiService.getExchangeListings();
+      setState(() {
+        _items = items;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.emerald)),
+      );
+    }
+
+    if (_error.isNotEmpty) {
+      return Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              TextButton(onPressed: _loadData, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppTheme.bg1,
       body: Container(
@@ -46,7 +99,7 @@ class ExchangeScreen extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 12),
-              ...exchangeItems.map((item) => Padding(
+              ..._items.map((item) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
                 child: GlassCard(
                   child: Column(
