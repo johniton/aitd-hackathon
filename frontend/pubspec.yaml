@@ -34,6 +34,13 @@ dependencies:
   fl_chart: ^0.69.0
   google_fonts: ^6.2.1
   percent_indicator: ^4.2.3
+  battery_plus: ^5.0.3
+  connectivity_plus: ^5.0.2
+  geolocator: ^10.1.0
+  http: ^1.1.0
+  flutter_activity_recognition: ^1.1.0
+  permission_handler: ^11.0.1
+
 
 dev_dependencies:
   flutter_test:
