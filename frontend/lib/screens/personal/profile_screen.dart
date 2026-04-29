@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
-import '../../data/static_data.dart';
+import 'package:provider/provider.dart';
+import '../../data/app_state.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
+import 'settings_screen.dart';
 import 'squad_screen.dart';
 import 'wrapped_screen.dart';
 
@@ -10,6 +12,10 @@ class ProfileScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final user = state.user;
+    final badges = state.earnedBadges;
+
     return Scaffold(
       backgroundColor: AppTheme.bg1,
       body: Container(
@@ -28,22 +34,22 @@ class ProfileScreen extends StatelessWidget {
                       height: 64,
                       decoration: const BoxDecoration(shape: BoxShape.circle, gradient: AppTheme.emeraldGradient),
                       alignment: Alignment.center,
-                      child: Text(currentUser.avatarInitials, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
+                      child: Text(user.avatarInitials, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700)),
                     ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(currentUser.name, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-                          Text('📍 ${currentUser.city}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                          Text(user.name, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+                          Text('📍 ${user.city}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
                         ],
                       ),
                     ),
                     Column(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
-                        Text('#${currentUser.rank}', style: const TextStyle(color: AppTheme.emerald, fontSize: 20, fontWeight: FontWeight.w800)),
+                        Text('#${user.rank}', style: const TextStyle(color: AppTheme.emerald, fontSize: 20, fontWeight: FontWeight.w800)),
                         const Text('city rank', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
                       ],
                     ),
@@ -53,35 +59,34 @@ class ProfileScreen extends StatelessWidget {
               const SizedBox(height: 16),
               Row(
                 children: [
-                  Expanded(child: _StatBox('🌿', '${currentUser.totalCo2Saved.toStringAsFixed(0)} kg', 'CO₂ Saved')),
+                  Expanded(child: _StatBox('🌿', '${user.totalCo2Saved.toStringAsFixed(0)} kg', 'CO₂ Saved')),
                   const SizedBox(width: 12),
-                  Expanded(child: _StatBox('🪙', '${currentUser.greenCoins.toInt()}', 'GreenCoins')),
+                  Expanded(child: _StatBox('🪙', '${user.greenCoins.toInt()}', 'GreenCoins')),
                   const SizedBox(width: 12),
-                  Expanded(child: _StatBox('🔥', '${currentUser.streakDays}d', 'Streak')),
+                  Expanded(child: _StatBox('🔥', '${user.streakDays}d', 'Streak')),
                 ],
               ),
               const SizedBox(height: 20),
               const Text('Badges', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               GlassCard(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: const [
-                    _Badge('🌱', 'Green Starter'),
-                    _Badge('🚲', 'Cyclist'),
-                    _Badge('♻️', 'Recycler'),
-                    _Badge('🔥', '12 Day Streak'),
-                    _Badge('🥗', 'Plant-based'),
-                  ],
-                ),
+                child: badges.isEmpty
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: Text('Log activities to earn badges!', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                      )
+                    : Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: badges.map((b) => _Badge(b.emoji, b.label)).toList(),
+                      ),
               ),
               const SizedBox(height: 20),
               const Text('Quick Links', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
               _NavTile(Icons.group, 'My Squad', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SquadScreen()))),
               _NavTile(Icons.auto_awesome, 'My Wrapped', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WrappedScreen()))),
-              _NavTile(Icons.settings, 'Settings', () {}),
+              _NavTile(Icons.settings, 'Settings', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()))),
               _NavTile(Icons.logout, 'Sign Out', () => Navigator.popUntil(context, (r) => r.isFirst), danger: true),
             ],
           ),

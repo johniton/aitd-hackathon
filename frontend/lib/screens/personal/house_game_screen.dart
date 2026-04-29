@@ -1,6 +1,8 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import '../../data/static_data.dart';
+import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
+import '../../data/app_state.dart';
 import '../../models/house_item_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
@@ -14,8 +16,6 @@ class HouseGameScreen extends StatefulWidget {
 }
 
 class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderStateMixin {
-  late List<HouseItemModel> _items;
-  late int _coins;
   late AnimationController _celebrationController;
   late AnimationController _houseEntranceController;
   late Animation<double> _houseEntrance;
@@ -24,8 +24,6 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
   @override
   void initState() {
     super.initState();
-    _items = List.from(shopItems);
-    _coins = currentUser.greenCoins.toInt();
 
     _houseEntranceController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _houseEntrance = CurvedAnimation(parent: _houseEntranceController, curve: Curves.easeOutBack);
@@ -41,28 +39,29 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
     super.dispose();
   }
 
-  void _buy(int index) {
-    final item = _items[index];
-    if (item.purchased || _coins < item.cost) return;
-    setState(() {
-      _items[index] = item.copyWith(purchased: true);
-      _coins -= item.cost;
-      _lastPurchasedIcon = item.icon;
-    });
+  void _buy(String itemId, String icon, String name) {
+    final success = context.read<AppState>().buyItem(itemId);
+    if (!success) return;
+    setState(() => _lastPurchasedIcon = icon);
     _celebrationController.forward(from: 0);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         backgroundColor: AppTheme.emerald,
-        content: Text('${item.icon} ${item.name} added to your eco home!'),
+        content: Text('$icon $name added to your eco home!'),
         duration: const Duration(seconds: 2),
       ),
     );
   }
 
-  bool _has(String id) => _items.any((i) => i.id == id && i.purchased);
+  bool _has(String id, List<HouseItemModel> items) => items.any((i) => i.id == id && i.purchased);
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final items = state.shop;
+    final coins = state.user.greenCoins.toInt();
+    final purchased = state.purchased;
+
     return Scaffold(
       backgroundColor: AppTheme.bg1,
       body: Container(
@@ -91,7 +90,7 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
                           children: [
                             const Text('🪙', style: TextStyle(fontSize: 18)),
                             const SizedBox(width: 6),
-                            Text('$_coins', style: const TextStyle(color: AppTheme.lime, fontSize: 16, fontWeight: FontWeight.w700)),
+                            Text('$coins', style: const TextStyle(color: AppTheme.lime, fontSize: 16, fontWeight: FontWeight.w700)),
                           ],
                         ),
                       ),
@@ -118,11 +117,11 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
                             animation: _celebrationController,
                             builder: (context, child) => CustomPaint(
                               painter: _HousePainter(
-                                hasSolar: _has('h1'),
-                                hasGarden: _has('h2'),
-                                hasEV: _has('h3'),
-                                hasWater: _has('h4'),
-                                hasBike: _items.any((i) => i.id == 'h5' && i.purchased),
+                                hasSolar: _has('h1', items),
+                                hasGarden: _has('h2', items),
+                                hasEV: _has('h3', items),
+                                hasWater: _has('h4', items),
+                                hasBike: _has('h5', items),
                                 celebrationProgress: _celebrationController.value,
                                 lastIcon: _lastPurchasedIcon,
                               ),
@@ -140,7 +139,11 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
                   child: Row(
                     children: [
                       const Expanded(child: Text('Shop', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700))),
-                      GradientButton(label: '📤 Share', onPressed: () {}, width: null),
+                      GradientButton(
+                        label: '📤 Share',
+                        width: null,
+                        onPressed: () => Share.share('🏡 My eco home on GoaGreen has ${purchased.length} green upgrades! ${purchased.map((i) => i.icon).join(' ')} #GoaGreen'),
+                      ),
                     ],
                   ),
                 ),
@@ -149,8 +152,12 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: SliverGrid(
                   delegate: SliverChildBuilderDelegate(
-                    (_, i) => _ShopCard(item: _items[i], canAfford: _coins >= _items[i].cost, onBuy: () => _buy(i)),
-                    childCount: _items.length,
+                    (_, i) => _ShopCard(
+                      item: items[i],
+                      canAfford: coins >= items[i].cost,
+                      onBuy: () => _buy(items[i].id, items[i].icon, items[i].name),
+                    ),
+                    childCount: items.length,
                   ),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,

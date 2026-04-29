@@ -6,6 +6,16 @@ class EmissionFactors {
   static const double scooterPerKm = 0.113;
   static const double autoPerKm = 0.095;
 
+  static const Map<String, double> transportKgPerKm = {
+    'car': 0.21,
+    'bus': 0.089,
+    'scooter': 0.113,
+    'auto': 0.095,
+    'bike': 0.0,
+    'walk': 0.0,
+    'ev': 0.02,
+  };
+
   // kg CO2 per meal
   static const double meatMeal = 2.5;
   static const double vegMeal = 0.5;

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'data/app_state.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
 
@@ -9,7 +11,12 @@ void main() {
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
-  runApp(const GoaGreenApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => AppState(),
+      child: const GoaGreenApp(),
+    ),
+  );
 }
 
 class GoaGreenApp extends StatelessWidget {

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../data/app_state.dart';
 import '../../data/static_data.dart';
 import '../../models/user_model.dart';
 import '../../theme/app_theme.dart';
@@ -16,8 +18,24 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final topThree = leaderboard.take(3).toList();
-    final rest = leaderboard.skip(3).toList();
+    final meState = context.watch<AppState>().user;
+    final board = List<UserModel>.from(leaderboard);
+    // Update the "me" entry with live state
+    final meIdx = board.indexWhere((u) => u.id == 'u1');
+    if (meIdx != -1) {
+      board[meIdx] = UserModel(
+        id: meState.id,
+        name: meState.name,
+        avatarInitials: meState.avatarInitials,
+        greenCoins: meState.greenCoins,
+        totalCo2Saved: meState.totalCo2Saved,
+        streakDays: meState.streakDays,
+        rank: meState.rank,
+        city: meState.city,
+      );
+    }
+    final topThree = board.take(3).toList();
+    final rest = board.skip(3).toList();
 
     return Scaffold(
       backgroundColor: AppTheme.bg1,
