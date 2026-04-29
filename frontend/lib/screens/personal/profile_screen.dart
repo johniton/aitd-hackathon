@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../data/app_state.dart';
 import '../../services/api_service.dart';
 import '../../models/user_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
+import '../auth_screen.dart';
 import 'squad_screen.dart';
 import 'wrapped_screen.dart';
 
@@ -118,18 +121,23 @@ class _ProfileScreenState extends State<ProfileScreen> {
               const SizedBox(height: 20),
               const Text('Badges', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
               const SizedBox(height: 12),
-              GlassCard(
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: const [
-                    _Badge('🌱', 'Green Starter'),
-                    _Badge('🚲', 'Cyclist'),
-                    _Badge('♻️', 'Recycler'),
-                    _Badge('🔥', '12 Day Streak'),
-                    _Badge('🥗', 'Plant-based'),
-                  ],
-                ),
+              Consumer<AppState>(
+                builder: (context, appState, _) {
+                  final badges = appState.earnedBadges;
+                  return GlassCard(
+                    child: badges.isEmpty
+                        ? const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Text('Log activities to earn badges!',
+                                style: TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                          )
+                        : Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: badges.map((b) => _Badge(b.emoji, b.label)).toList(),
+                          ),
+                  );
+                },
               ),
               const SizedBox(height: 20),
               const Text('Quick Links', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
@@ -137,7 +145,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
               _NavTile(Icons.group, 'My Squad', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SquadScreen()))),
               _NavTile(Icons.auto_awesome, 'My Wrapped', () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WrappedScreen()))),
               _NavTile(Icons.settings, 'Settings', () {}),
-              _NavTile(Icons.logout, 'Sign Out', () => Navigator.popUntil(context, (r) => r.isFirst), danger: true),
+              _NavTile(Icons.logout, 'Sign Out', () async {
+                await ApiService.clearUserId();
+                if (context.mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const AuthScreen()),
+                    (_) => false,
+                  );
+                }
+              }, danger: true),
             ],
           ),
         ),

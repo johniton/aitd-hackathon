@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' show pi;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../theme/app_theme.dart';
@@ -95,7 +96,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
         _pulseController.repeat(reverse: true);
       },
     );
-    _motionService.start();
+    if (!kIsWeb) _motionService.start();
 
     // ── Financial service ────────────────────────────────────────────────────
     TransactionSensorService(
@@ -131,7 +132,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
       },
     );
 
-    _deviceService.start();
+    if (!kIsWeb) _deviceService.start();
 
     // ── Grid Intensity ───────────────────────────────────────────────────────
     final gridService = GridIntensityService(apiKey: AppConfig.electricityMapsApiKey);
@@ -681,12 +682,15 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Text(
-                        '${intensity.toStringAsFixed(0)} gCO₂/kWh',
-                        style: TextStyle(
-                            color: intensityColor,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800),
+                      Flexible(
+                        child: Text(
+                          '${intensity.toStringAsFixed(0)} gCO₂/kWh',
+                          style: TextStyle(
+                              color: intensityColor,
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800),
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Container(

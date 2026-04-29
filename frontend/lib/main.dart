@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import 'data/app_state.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'theme/app_theme.dart';
 import 'screens/splash_screen.dart';
@@ -13,14 +11,8 @@ Future<void> main() async {
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
   ));
-  runApp(
-    ChangeNotifierProvider(
-      create: (_) => AppState(),
-      child: const GoaGreenApp(),
-    ),
-  );
+  runApp(const GoaGreenApp());
 }
-
 
 class GoaGreenApp extends StatelessWidget {
   const GoaGreenApp({super.key});

@@ -77,6 +77,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
 
     final weekTotal = _weeklyData.isEmpty ? 0.0 : _weeklyData.reduce((a, b) => a + b);
+    final bestWeek = _weeklyData.isEmpty ? 0.0 : _weeklyData.reduce((a, b) => a > b ? a : b);
     
     return Scaffold(
       backgroundColor: AppTheme.bg1,
@@ -162,8 +163,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       childAspectRatio: 1.4,
                       children: [
                         StatTile(label: 'Total Saved', value: _user.totalCo2Saved.toStringAsFixed(0), unit: 'kg CO₂', icon: Icons.eco),
-                        const StatTile(label: 'Best Week', value: '12.4', unit: 'kg', icon: Icons.star, color: AppTheme.lime),
-                        const StatTile(label: 'Activities', value: '147', icon: Icons.check_circle_outline),
+                        StatTile(label: 'Best Day', value: bestWeek.toStringAsFixed(1), unit: 'kg', icon: Icons.star, color: AppTheme.lime),
+                        StatTile(label: 'Activities', value: '${_recentActivities.length}', icon: Icons.check_circle_outline),
                         StatTile(label: 'City Rank', value: '#${_user.rank}', icon: Icons.location_city, color: AppTheme.lime),
                       ],
                     ),

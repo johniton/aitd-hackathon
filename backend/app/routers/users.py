@@ -1,10 +1,52 @@
-from fastapi import APIRouter, Depends, HTTPException
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.auth import get_current_user
-from app.models.user import UserResponse, UserUpdate
+from app.models.user import UserResponse, UserUpdate, UserCreate
 from app import db_ops
 
 router = APIRouter()
+
+
+@router.post("", response_model=UserResponse, status_code=201)
+def register_user(body: UserCreate):
+    parts = body.name.strip().split()
+    initials = "".join(p[0].upper() for p in parts[:2]) if parts else "?"
+    new_user = {
+        "id": str(uuid.uuid4()),
+        "name": body.name.strip(),
+        "avatar_initials": initials,
+        "city": body.city,
+        "green_coins": 0,
+        "total_co2_saved": 0,
+        "streak_days": 0,
+    }
+    created = db_ops.create_user(new_user)
+    return UserResponse(
+        id=created["id"],
+        name=created["name"],
+        avatar_initials=created["avatar_initials"],
+        green_coins=created.get("green_coins", 0),
+        total_co2_saved=created.get("total_co2_saved", 0),
+        streak_days=created.get("streak_days", 0),
+        rank=0,
+        city=created.get("city", ""),
+    )
+
+
+@router.get("/search", response_model=list[UserResponse])
+def search_users(name: str = Query(..., min_length=1)):
+    users = db_ops.search_users_by_name(name)
+    result = []
+    for u in users:
+        rank = db_ops.get_user_rank(u["id"])
+        result.append(UserResponse(
+            id=u["id"], name=u["name"], avatar_initials=u["avatar_initials"],
+            green_coins=u.get("green_coins", 0), total_co2_saved=u.get("total_co2_saved", 0),
+            streak_days=u.get("streak_days", 0), rank=rank, city=u.get("city", ""),
+        ))
+    return result
 
 
 @router.get("/me", response_model=UserResponse)

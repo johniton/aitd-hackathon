@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../data/app_state.dart';
+import '../services/api_service.dart';
 import '../theme/app_theme.dart';
+import 'auth_screen.dart';
 import 'mode_select_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -26,16 +30,36 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     );
     _controller.forward().then((_) async {
       await Future.delayed(const Duration(milliseconds: 800));
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          PageRouteBuilder(
-            pageBuilder: (context, animation, secondaryAnimation) => const ModeSelectScreen(),
-            transitionsBuilder: (context, anim, secondaryAnimation, child) => FadeTransition(opacity: anim, child: child),
-            transitionDuration: const Duration(milliseconds: 600),
-          ),
-        );
-      }
+      if (!mounted) return;
+      await _navigate();
     });
+  }
+
+  Future<void> _navigate() async {
+    await ApiService.init();
+    final userId = ApiService.currentUserId;
+
+    if (!mounted) return;
+    if (userId != null) {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, _) => ChangeNotifierProvider(
+            create: (_) => AppState(userId: userId),
+            child: const ModeSelectScreen(),
+          ),
+          transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
+      );
+    } else {
+      Navigator.of(context).pushReplacement(
+        PageRouteBuilder(
+          pageBuilder: (context, animation, _) => const AuthScreen(),
+          transitionsBuilder: (_, anim, __, child) => FadeTransition(opacity: anim, child: child),
+          transitionDuration: const Duration(milliseconds: 600),
+        ),
+      );
+    }
   }
 
   @override

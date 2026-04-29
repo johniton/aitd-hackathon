@@ -31,14 +31,14 @@ class _WrappedScreenState extends State<WrappedScreen> {
           _WrappedPage(
             bg: const LinearGradient(colors: [Color(0xFF064E3B), Color(0xFF065F46)]),
             emoji: '🌍',
-            headline: '${stats['co2Saved']} kg',
+            headline: '${stats['co2_saved']} kg',
             subtitle: 'of CO₂ saved\nthis year',
             accent: AppTheme.emerald,
           ),
           _WrappedPage(
             bg: const LinearGradient(colors: [Color(0xFF1A3A1A), Color(0xFF2D5A2D)]),
             emoji: '🌳',
-            headline: '${stats['treesEquivalent']} trees',
+            headline: '${stats['trees_equivalent']} trees',
             subtitle: 'worth of carbon absorbed\nin 2025',
             accent: AppTheme.lime,
           ),
@@ -52,14 +52,14 @@ class _WrappedScreenState extends State<WrappedScreen> {
           _WrappedPage(
             bg: const LinearGradient(colors: [Color(0xFF0A0F1A), Color(0xFF0D1A3A)]),
             emoji: '🚲',
-            headline: '${stats['topCategory']}',
+            headline: '${stats['top_category']}',
             subtitle: 'Your greenest category\nthis year',
             accent: const Color(0xFF60A5FA),
           ),
           _WrappedPage(
             bg: const LinearGradient(colors: [Color(0xFF1A0A0F), Color(0xFF3A0D1A)]),
             emoji: '🔥',
-            headline: '${stats['activitiesLogged']}',
+            headline: '${stats['activities_logged']}',
             subtitle: 'eco actions logged\nKeep it up!',
             accent: const Color(0xFFF97316),
           ),

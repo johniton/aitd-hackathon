@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:http/http.dart' as http;
 import 'package:geolocator/geolocator.dart';
 
@@ -13,17 +13,34 @@ class GridIntensityService {
   /// Fetches real-time carbon intensity (gCO₂e/kWh) for the current location.
   /// Falls back to 436 (global average) on failure.
   Future<double> fetchIntensity() async {
+    if (_apiKey.isEmpty || kIsWeb) return _getFallbackIntensity();
     try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.lowest,
-      );
-
-      if (_apiKey.isEmpty) {
+      LocationPermission permission;
+      try {
+        permission = await Geolocator.checkPermission();
+      } catch (_) {
+        return _getFallbackIntensity();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
         return _getFallbackIntensity();
       }
 
-      final url = Uri.parse('$_baseUrl/carbon-intensity/latest?lat=${position.latitude}&lon=${position.longitude}');
-      final response = await http.get(url, headers: {'auth-token': _apiKey});
+      Position position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.lowest,
+          ),
+        );
+      } catch (_) {
+        return _getFallbackIntensity();
+      }
+
+      final url = Uri.parse(
+          '$_baseUrl/carbon-intensity/latest?lat=${position.latitude}&lon=${position.longitude}');
+      final response =
+          await http.get(url, headers: {'auth-token': _apiKey});
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);

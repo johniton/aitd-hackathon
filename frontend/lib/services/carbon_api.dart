@@ -40,7 +40,7 @@ class DashboardResult {
 }
 
 class CarbonApi {
-  static String get _base => '${dotenv.env['BACKEND_URL'] ?? 'http://10.0.2.2:8000'}/api/v1';
+  static String get _base => '${dotenv.env['BACKEND_URL'] ?? 'http://127.0.0.1:8000'}/api/v1';
 
   static Future<ActivityResult?> logActivity({
     required String userId,

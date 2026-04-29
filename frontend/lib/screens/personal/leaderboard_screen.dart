@@ -110,7 +110,7 @@ class _LeaderboardScreenState extends State<LeaderboardScreen> {
                   delegate: SliverChildBuilderDelegate(
                     (_, i) {
                       final user = rest[i];
-                      final isMe = user.id == ApiService.devUserId;
+                      final isMe = user.id == ApiService.currentUserId;
                       return Padding(
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
                         child: GlassCard(

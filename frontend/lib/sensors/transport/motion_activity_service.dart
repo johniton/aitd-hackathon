@@ -1,6 +1,6 @@
 import 'dart:async';
-import 'package:flutter_activity_recognition/flutter_activity_recognition.dart';
-import 'package:geolocator/geolocator.dart' hide ActivityType;
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:geolocator/geolocator.dart';
 
 /// Detected movement mode reported by the OS motion subsystem.
 enum TransportMode { stationary, walking, cycling, automotive, unknown }
@@ -50,6 +50,9 @@ const Map<TransportMode, double> _kgCo2ePerKm = {
 
 /// Polls the OS motion subsystem, detects state transitions, and calculates
 /// CO₂ for each automotive / cycling segment automatically.
+///
+/// Note: flutter_activity_recognition removed due to AGP namespace issues.
+/// This version uses GPS-only tracking as a fallback.
 class MotionActivityService {
   MotionActivityService({
     required this.onCarbonEstimate,
@@ -71,11 +74,11 @@ class MotionActivityService {
   Position? _previousPosition;
   double _accumulatedDistanceKm = 0.0;
 
-  StreamSubscription<Activity>? _subscription;
+  StreamSubscription<Position>? _positionSubscription;
 
-  /// Start listening to OS activity updates.
+  /// Start listening to position updates (GPS-only fallback).
   Future<void> start() async {
-    // Request permissions
+    if (kIsWeb) return;
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
@@ -85,100 +88,50 @@ class MotionActivityService {
       if (permission == LocationPermission.denied) return;
     }
 
-    _subscription = FlutterActivityRecognition.instance.activityStream.listen((activity) {
-      final motionActivity = _mapToMotionActivity(activity);
-      _handleActivity(motionActivity);
+    _segmentStart = DateTime.now();
+    _previousActivity = MotionActivity(
+      mode: TransportMode.unknown,
+      timestamp: DateTime.now(),
+      confidence: 100,
+    );
+
+    _positionSubscription = Geolocator.getPositionStream(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        distanceFilter: 10,
+      ),
+    ).listen((position) {
+      if (_previousPosition != null) {
+        final distance = Geolocator.distanceBetween(
+          _previousPosition!.latitude,
+          _previousPosition!.longitude,
+          position.latitude,
+          position.longitude,
+        );
+        _accumulatedDistanceKm += distance / 1000.0;
+      }
+      _previousPosition = position;
     });
   }
 
   /// Stop all monitoring and release resources.
   void stop() {
-    _subscription?.cancel();
-  }
-
-  void _handleActivity(MotionActivity activity) async {
-    if (activity.confidence < minimumConfidence) return;
-
-    final previous = _previousActivity;
-
-    // State transition detected — close out previous segment.
-    if (previous != null && previous.mode != activity.mode) {
-      await _closeSegment(previous.mode, activity.timestamp);
+    _positionSubscription?.cancel();
+    if (_accumulatedDistanceKm >= minimumDistanceKm) {
+      final factor = _kgCo2ePerKm[_previousActivity?.mode ?? TransportMode.automotive] ?? 0.171;
+      onCarbonEstimate(TransportCarbonEstimate(
+        kgCo2e: factor * _accumulatedDistanceKm,
+        distanceKm: _accumulatedDistanceKm,
+        mode: _previousActivity?.mode ?? TransportMode.automotive,
+        calculatedAt: DateTime.now(),
+      ));
     }
-
-    // Start tracking a new segment if we entered a carbon-relevant mode.
-    if (_shouldTrack(activity.mode)) {
-      _segmentStart ??= activity.timestamp;
-      
-      // Update distance
-      final currentPosition = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.low,
-      );
-      
-      if (_previousPosition != null) {
-        final distance = Geolocator.distanceBetween(
-          _previousPosition!.latitude,
-          _previousPosition!.longitude,
-          currentPosition.latitude,
-          currentPosition.longitude,
-        );
-        _accumulatedDistanceKm += distance / 1000.0;
-      }
-      _previousPosition = currentPosition;
-    } else {
-      _previousPosition = null; // Reset position when stationary/walking
-    }
-
-    _previousActivity = activity;
-  }
-
-  Future<void> _closeSegment(TransportMode mode, DateTime endTime) async {
-    if (_segmentStart == null) return;
-    if (_accumulatedDistanceKm < minimumDistanceKm) {
-      _reset();
-      return;
-    }
-
-    final factor = _kgCo2ePerKm[mode] ?? 0.0;
-    final estimate = TransportCarbonEstimate(
-      kgCo2e: factor * _accumulatedDistanceKm,
-      distanceKm: _accumulatedDistanceKm,
-      mode: mode,
-      calculatedAt: endTime,
-    );
-    onCarbonEstimate(estimate);
     _reset();
   }
-
-  bool _shouldTrack(TransportMode mode) =>
-      mode == TransportMode.automotive || mode == TransportMode.cycling;
 
   void _reset() {
     _segmentStart = null;
     _accumulatedDistanceKm = 0.0;
     _previousPosition = null;
   }
-
-  MotionActivity _mapToMotionActivity(Activity activity) {
-    TransportMode mode = switch (activity.type) {
-      ActivityType.STILL => TransportMode.stationary,
-      ActivityType.WALKING || ActivityType.RUNNING => TransportMode.walking,
-      ActivityType.ON_BICYCLE => TransportMode.cycling,
-      ActivityType.IN_VEHICLE => TransportMode.automotive,
-      _ => TransportMode.unknown,
-    };
-
-    int confidence = switch (activity.confidence) {
-      ActivityConfidence.HIGH => 100,
-      ActivityConfidence.MEDIUM => 50,
-      ActivityConfidence.LOW => 25,
-    };
-
-    return MotionActivity(
-      mode: mode,
-      timestamp: DateTime.now(),
-      confidence: confidence,
-    );
-  }
 }
-

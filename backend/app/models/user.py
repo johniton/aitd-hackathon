@@ -15,3 +15,8 @@ class UserResponse(BaseModel):
 class UserUpdate(BaseModel):
     name: str | None = None
     city: str | None = None
+
+
+class UserCreate(BaseModel):
+    name: str
+    city: str = ""
