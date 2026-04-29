@@ -2,12 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:percent_indicator/percent_indicator.dart';
 import '../../data/static_data.dart';
 import '../../models/business_model.dart';
+import '../../services/tourism_engine_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 
 class BenchmarkScreen extends StatelessWidget {
   final BusinessSector sector;
-  const BenchmarkScreen({super.key, required this.sector});
+  final TourismEngineController? tourismController;
+  const BenchmarkScreen({
+    super.key,
+    required this.sector,
+    this.tourismController,
+  });
 
   BusinessModel get _biz => businessProfiles.firstWhere(
     (b) => b.sector == sector,
@@ -16,6 +22,73 @@ class BenchmarkScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (sector == BusinessSector.tourism && tourismController != null) {
+      return AnimatedBuilder(
+        animation: tourismController!,
+        builder: (_, __) {
+          final c = tourismController!;
+          final peers = [
+            ('North Goa Green Trails', c.peerAverage * 0.7),
+            ('Eco Stay Collective', c.peerAverage * 0.82),
+            ('You', c.dailyTotal),
+            ('Legacy Tours', c.peerAverage * 1.1),
+          ];
+          return Scaffold(
+            backgroundColor: AppTheme.bg1,
+            body: Container(
+              decoration: const BoxDecoration(gradient: AppTheme.bgGradient),
+              child: SafeArea(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    const Text('Dynamic Benchmark', style: TextStyle(color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 6),
+                    Text(
+                      'You are ${c.peerAdvantagePercent.toStringAsFixed(0)}% better than similar tourism operators in North Goa this week',
+                      style: const TextStyle(color: AppTheme.emerald, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    ...peers.asMap().entries.map((entry) {
+                      final i = entry.key;
+                      final p = entry.value;
+                      final value = p.$2;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: GlassCard(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text('#${i + 1}', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w700)),
+                                  const SizedBox(width: 8),
+                                  Expanded(child: Text(p.$1, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
+                                  Text('${value.toStringAsFixed(1)} kg', style: const TextStyle(color: AppTheme.emerald, fontSize: 12)),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              LinearPercentIndicator(
+                                lineHeight: 8,
+                                percent: (value / 30).clamp(0.05, 1.0),
+                                backgroundColor: AppTheme.surface,
+                                progressColor: p.$1 == 'You' ? AppTheme.lime : AppTheme.emerald,
+                                barRadius: const Radius.circular(4),
+                                padding: EdgeInsets.zero,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      );
+    }
+
     final biz = _biz;
     final myPct = (biz.emissionsKg / (biz.peerAvgKg * 1.5)).clamp(0.0, 1.0);
     final avgPct = (biz.peerAvgKg / (biz.peerAvgKg * 1.5)).clamp(0.0, 1.0);

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from db.database import get_db
+from database import get_db
 from .schema import ActivityCreate, ActivityResponse, DashboardResponse
 from .service import process_activity, get_dashboard
 

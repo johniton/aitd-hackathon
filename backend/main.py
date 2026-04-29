@@ -1,11 +1,16 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from core.config import settings
-from db.database import engine, Base
+from database import engine, Base
 from modules.activity.routes import router as activity_router
+from modules.tourism.routes import router as tourism_router
 
 # Create database tables
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception:
+    # Keep API alive even if external DB is temporarily unreachable.
+    pass
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -27,6 +32,11 @@ app.include_router(
     activity_router,
     prefix=f"{settings.API_V1_STR}/activity",
     tags=["activity"]
+)
+app.include_router(
+    tourism_router,
+    prefix=f"{settings.API_V1_STR}/tourism",
+    tags=["tourism"]
 )
 
 @app.get("/health")

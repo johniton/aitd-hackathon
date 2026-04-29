@@ -12,6 +12,7 @@ class SectorSelectScreen extends StatelessWidget {
     _SectorInfo(BusinessSector.cashew, '🌰', 'Cashew', 'Processing, roasting, export'),
     _SectorInfo(BusinessSector.farmer, '🌾', 'Farmer', 'Paddy, horticulture, spices'),
     _SectorInfo(BusinessSector.bakery, '🍞', 'Bakery', 'Pão de Goa, confectionery'),
+    _SectorInfo(BusinessSector.other, '⚙️', 'Other', 'Custom business profile'),
   ];
 
   @override
