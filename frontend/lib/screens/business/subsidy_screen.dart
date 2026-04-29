@@ -1,69 +1,80 @@
 import 'package:flutter/material.dart';
-import '../../services/api_service.dart';
-import '../../models/business_model.dart';
+import '../../data/static_data.dart';
+import '../../services/tourism_engine_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
+import '../../widgets/disclaimer_banner.dart';
+import '../../data/subsidy_database.dart';
+import 'package:url_launcher/url_launcher.dart';
 
-class SubsidyScreen extends StatefulWidget {
-  const SubsidyScreen({super.key});
-
-  @override
-  State<SubsidyScreen> createState() => _SubsidyScreenState();
-}
-
-class _SubsidyScreenState extends State<SubsidyScreen> {
-  bool _isLoading = true;
-  String _error = '';
-  List<SubsidyModel> _subsidies = [];
-
-  @override
-  void initState() {
-    super.initState();
-    _loadData();
-  }
-
-  Future<void> _loadData() async {
-    try {
-      final subsidies = await ApiService.getSubsidies();
-      setState(() {
-        _subsidies = subsidies;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _error = e.toString();
-        _isLoading = false;
-      });
-    }
-  }
+class SubsidyScreen extends StatelessWidget {
+  final TourismEngineController? tourismController;
+  const SubsidyScreen({super.key, this.tourismController});
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Scaffold(
-        backgroundColor: AppTheme.bg1,
-        body: Center(child: CircularProgressIndicator(color: AppTheme.emerald)),
+    if (tourismController != null) {
+      return AnimatedBuilder(
+        animation: tourismController!,
+        builder: (_, __) {
+          final matches = tourismController!.subsidyMatches();
+          final eligible = matches.where((m) => m.isEligible).toList();
+          final total = eligible.fold<int>(0, (sum, item) {
+            final number = int.tryParse(item.amount.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
+            return sum + number;
+          });
+          return Scaffold(
+            backgroundColor: AppTheme.bg1,
+            body: Container(
+              decoration: const BoxDecoration(gradient: AppTheme.bgGradient),
+              child: SafeArea(
+                child: ListView(
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    const Text('Smart Subsidy Engine', style: TextStyle(color: AppTheme.textPrimary, fontSize: 24, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 12),
+                    GlassCard(
+                      child: Text(
+                        '₹${total.toString()} eligible based on emissions, waste type, and tourism profile',
+                        style: const TextStyle(color: AppTheme.emerald, fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ...matches.map((s) => Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: GlassCard(
+                            borderColor: s.isEligible ? AppTheme.emerald.withValues(alpha: 0.4) : null,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(s.title, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 4),
+                                Text(s.description, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                                const SizedBox(height: 8),
+                                Text(s.amount, style: const TextStyle(color: AppTheme.lime, fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 8),
+                                GradientButton(
+                                  label: s.isEligible ? 'Apply Now' : 'Track Eligibility',
+                                  onPressed: () {
+                                    if (s.isEligible && tourismController != null) {
+                                      _showApplyDialog(context, s.title, tourismController!);
+                                    }
+                                  },
+                                  width: double.infinity,
+                                ),
+                              ],
+                            ),
+                          ),
+                        )),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       );
     }
-
-    if (_error.isNotEmpty) {
-      return Scaffold(
-        backgroundColor: AppTheme.bg1,
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
-              TextButton(onPressed: _loadData, child: const Text('Retry')),
-            ],
-          ),
-        ),
-      );
-    }
-
-    final eligibleCount = _subsidies.where((s) => s.isEligible).length;
-    // We mock the total value from the eligible count (this should ideally be in the backend model but it's okay for now)
 
     return Scaffold(
       backgroundColor: AppTheme.bg1,
@@ -86,12 +97,12 @@ class _SubsidyScreenState extends State<SubsidyScreen> {
                       child: const Icon(Icons.auto_awesome, color: AppTheme.emerald),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(
+                    const Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('$eligibleCount subsidies eligible', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-                          const Text('Total available: ₹1,70,000', style: TextStyle(color: AppTheme.emerald, fontSize: 13)),
+                          Text('2 subsidies eligible', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                          Text('Total available: ₹1,70,000', style: TextStyle(color: AppTheme.emerald, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -99,7 +110,7 @@ class _SubsidyScreenState extends State<SubsidyScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              ..._subsidies.map((s) => Padding(
+              ...subsidies.map((s) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: GlassCard(
                   borderColor: s.isEligible ? AppTheme.emerald.withValues(alpha: 0.4) : null,
@@ -136,7 +147,11 @@ class _SubsidyScreenState extends State<SubsidyScreen> {
                       ),
                       if (s.isEligible) ...[
                         const SizedBox(height: 12),
-                        GradientButton(label: 'Apply Now', onPressed: () {}, width: double.infinity),
+                        GradientButton(label: 'Apply Now', onPressed: () {
+                          if (tourismController != null) {
+                            _showApplyDialog(context, s.title, tourismController!);
+                          }
+                        }, width: double.infinity),
                       ],
                     ],
                   ),
@@ -146,6 +161,89 @@ class _SubsidyScreenState extends State<SubsidyScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  void _showApplyDialog(BuildContext context, String title, TourismEngineController c) {
+    // Try to find the exact scheme, or use the first one as fallback if not found
+    final subsidy = subsidyDatabase[title] ?? subsidyDatabase.values.first;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return Dialog(
+          backgroundColor: AppTheme.bg1,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(gradient: AppTheme.bgGradient, borderRadius: BorderRadius.circular(16)),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.description, color: AppTheme.emerald),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text('Apply: ${subsidy.name}', 
+                        style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
+                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                const DisclaimerBanner(disclaimerKey: 'subsidy_apply_disclaimer_screen'),
+                const SizedBox(height: 8),
+                Text('Basic Eligibility', style: const TextStyle(color: AppTheme.emerald, fontSize: 13, fontWeight: FontWeight.bold)),
+                Text(subsidy.basicEligibility, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                const SizedBox(height: 12),
+                Text('Goa Office', style: const TextStyle(color: AppTheme.emerald, fontSize: 13, fontWeight: FontWeight.bold)),
+                Text(subsidy.goaOfficeAddress, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                const SizedBox(height: 12),
+                Text('Disclaimer', style: const TextStyle(color: AppTheme.emerald, fontSize: 13, fontWeight: FontWeight.bold)),
+                Text(subsidy.disclaimer, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(color: AppTheme.warning.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: const Text('⚠️ This app does not provide legal or financial advice. Visit the official portal to confirm your eligibility.', style: TextStyle(color: AppTheme.warning, fontSize: 12, fontWeight: FontWeight.bold)),
+                ),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.emerald, foregroundColor: Colors.white),
+                        onPressed: () async {
+                          final uri = Uri.parse(subsidy.officialUrl);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri);
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text('Could not open ${subsidy.officialUrl}'),
+                              backgroundColor: AppTheme.warning,
+                            ));
+                          }
+                        },
+                        child: const Text('Official Portal'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.surface),
+                        onPressed: () => Navigator.pop(ctx),
+                        child: const Text('Close', style: TextStyle(color: AppTheme.textPrimary)),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -1,4 +1,4 @@
-enum BusinessSector { tourism, cashew, farmer, bakery }
+enum BusinessSector { tourism, cashew, farmer, bakery, other }
 
 class BusinessModel {
   final String id;
@@ -40,6 +40,7 @@ class BusinessModel {
       case BusinessSector.cashew: return '🌰';
       case BusinessSector.farmer: return '🌾';
       case BusinessSector.bakery: return '🍞';
+      case BusinessSector.other: return '⚙️';
     }
   }
 
@@ -49,6 +50,7 @@ class BusinessModel {
       case BusinessSector.cashew: return 'Cashew';
       case BusinessSector.farmer: return 'Farmer';
       case BusinessSector.bakery: return 'Bakery';
+      case BusinessSector.other: return 'Custom';
     }
   }
 }
