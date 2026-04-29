@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../sensors/sensors.dart';
 import '../../config/app_config.dart';
+import '../../sensors/real_sensors_service.dart';
 
 // ── Sensor state model ───────────────────────────────────────────────────────
 
@@ -35,6 +36,13 @@ class _SensorState {
   bool privacyShieldEnabled = true;
   int eventsBlocked = 0;
 
+  // Real Sensors
+  double accelX = 0.0, accelY = 0.0, accelZ = 0.0;
+  double gyroX = 0.0, gyroY = 0.0, gyroZ = 0.0;
+  int steps = 0;
+  String pedStatus = "Unknown";
+  int batteryLevel = 100;
+
   double get totalKgToday =>
       transportKgToday + financialKgToday + digitalKgToday;
 }
@@ -60,6 +68,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
   late Animation<double> _ringAnim;
 
   Timer? _gridTicker;
+  RealSensorsService? _realSensors;
 
 
 
@@ -147,6 +156,40 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
     gridService.fetchIntensity().then((val) {
       if (mounted) setState(() => _state.gridIntensity = val);
     });
+
+    // ── Real Sensors Service ─────────────────────────────────────────────────
+    _realSensors = RealSensorsService(
+      onAccelEvent: (e) {
+        if (!mounted) return;
+        setState(() {
+          _state.accelX = e.x;
+          _state.accelY = e.y;
+          _state.accelZ = e.z;
+        });
+      },
+      onGyroEvent: (e) {
+        if (!mounted) return;
+        setState(() {
+          _state.gyroX = e.x;
+          _state.gyroY = e.y;
+          _state.gyroZ = e.z;
+        });
+      },
+      onStepCount: (e) {
+        if (!mounted) return;
+        setState(() => _state.steps = e.steps);
+      },
+      onPedestrianStatus: (e) {
+        if (!mounted) return;
+        setState(() => _state.pedStatus = e.status);
+      },
+      onBatteryState: (s) {},
+      onBatteryLevel: (l) {
+        if (!mounted) return;
+        setState(() => _state.batteryLevel = l);
+      },
+    );
+    if (!kIsWeb) _realSensors!.start();
   }
 
 
@@ -156,6 +199,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
     _pulseController.dispose();
     _ringController.dispose();
     _gridTicker?.cancel();
+    _realSensors?.stop();
     super.dispose();
   }
 
@@ -180,6 +224,8 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
               SliverToBoxAdapter(child: _buildSectionLabel('03 — DIGITAL DEVICE')),
               SliverToBoxAdapter(child: _buildDigitalCard()),
               SliverToBoxAdapter(child: _buildGridIntensityCard()),
+              SliverToBoxAdapter(child: _buildSectionLabel('04 — RAW HARDWARE SENSORS')),
+              SliverToBoxAdapter(child: _buildRawSensorsCard()),
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
           ),
@@ -719,6 +765,66 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
               ),
             ),
             _SourceBadge(label: 'Electricity Maps API', compact: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Raw Sensors Card ──────────────────────────────────────────────────────
+
+  Widget _buildRawSensorsCard() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: GlassCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.developer_board_outlined, color: Colors.orangeAccent, size: 26),
+                SizedBox(width: 12),
+                Text('Hardware Telemetry',
+                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                _MetricBox('Steps', '${_state.steps}', Colors.orangeAccent),
+                const SizedBox(width: 10),
+                _MetricBox('Motion', _state.pedStatus, Colors.orangeAccent),
+                const SizedBox(width: 10),
+                _MetricBox('Battery', '${_state.batteryLevel}%', Colors.orangeAccent),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.orangeAccent.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.15)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Live Accelerometer (m/s²)',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                  const SizedBox(height: 4),
+                  Text('X: ${_state.accelX.toStringAsFixed(2)} | Y: ${_state.accelY.toStringAsFixed(2)} | Z: ${_state.accelZ.toStringAsFixed(2)}',
+                      style: const TextStyle(color: Colors.orangeAccent, fontSize: 13, fontFamily: 'monospace')),
+                  const SizedBox(height: 12),
+                  const Text('Live Gyroscope (rad/s)',
+                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                  const SizedBox(height: 4),
+                  Text('X: ${_state.gyroX.toStringAsFixed(2)} | Y: ${_state.gyroY.toStringAsFixed(2)} | Z: ${_state.gyroZ.toStringAsFixed(2)}',
+                      style: const TextStyle(color: Colors.orangeAccent, fontSize: 13, fontFamily: 'monospace')),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+            const _SourceBadge(label: 'Android SensorManager (Accelerometer, Gyroscope, Pedometer, Battery)'),
           ],
         ),
       ),

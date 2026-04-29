@@ -2,17 +2,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 
-/// Detected movement mode reported by the OS motion subsystem.
 enum TransportMode { stationary, walking, cycling, automotive, unknown }
 
-/// A single snapshot from the motion subsystem.
 class MotionActivity {
   final TransportMode mode;
   final DateTime timestamp;
-
-  /// Confidence 0–100 as returned by the OS.
   final int confidence;
-
   const MotionActivity({
     required this.mode,
     required this.timestamp,
@@ -20,65 +15,68 @@ class MotionActivity {
   });
 }
 
-/// A carbon estimate returned after querying the Climatiq / Carbon Interface API.
 class TransportCarbonEstimate {
-  /// kg CO₂e for the trip segment
   final double kgCo2e;
-
-  /// Distance driven/cycled in km
   final double distanceKm;
   final TransportMode mode;
+  final double speedKmh;
   final DateTime calculatedAt;
-
   const TransportCarbonEstimate({
     required this.kgCo2e,
     required this.distanceKm,
     required this.mode,
+    required this.speedKmh,
     required this.calculatedAt,
   });
 }
 
-/// kg CO₂e per km by transport mode.
-/// Source: Climatiq emission factor database (2026 averages).
 const Map<TransportMode, double> _kgCo2ePerKm = {
-  TransportMode.automotive: 0.171, // average petrol car
-  TransportMode.cycling: 0.0,      // zero direct emissions
+  TransportMode.automotive: 0.171,
+  TransportMode.cycling: 0.0,
   TransportMode.walking: 0.0,
   TransportMode.stationary: 0.0,
   TransportMode.unknown: 0.0,
 };
 
-/// Polls the OS motion subsystem, detects state transitions, and calculates
-/// CO₂ for each automotive / cycling segment automatically.
-///
-/// Note: flutter_activity_recognition removed due to AGP namespace issues.
-/// This version uses GPS-only tracking as a fallback.
+// Speed thresholds inferred from GPS
+const double _walkMaxKmh = 7.0;    // 0–7 km/h → walking
+const double _cycleMaxKmh = 30.0;  // 7–30 km/h → cycling / e-scooter
+// > 30 km/h → automotive
+
+TransportMode _inferMode(double speedKmh) {
+  if (speedKmh < 0.5) return TransportMode.stationary;
+  if (speedKmh <= _walkMaxKmh) return TransportMode.walking;
+  if (speedKmh <= _cycleMaxKmh) return TransportMode.cycling;
+  return TransportMode.automotive;
+}
+
 class MotionActivityService {
   MotionActivityService({
     required this.onCarbonEstimate,
-    this.minimumConfidence = 75,
-    this.minimumDistanceKm = 0.1,
+    this.onModeChanged,
+    this.minimumDistanceKm = 0.05,
+    this.emitIntervalSeconds = 30,
   });
 
-  /// Invoked whenever a completed trip segment has a calculated CO₂ figure.
   final void Function(TransportCarbonEstimate estimate) onCarbonEstimate;
-
-  /// Discard OS activity events below this confidence level (0–100).
-  final int minimumConfidence;
-
-  /// Ignore segments shorter than this (avoids API spam for micro-trips).
+  final void Function(TransportMode mode, double speedKmh)? onModeChanged;
   final double minimumDistanceKm;
+  final int emitIntervalSeconds;
 
-  MotionActivity? _previousActivity;
-  DateTime? _segmentStart;
-  Position? _previousPosition;
+  TransportMode _currentMode = TransportMode.unknown;
+  double _speedKmh = 0.0;
   double _accumulatedDistanceKm = 0.0;
+  Position? _previousPosition;
 
   StreamSubscription<Position>? _positionSubscription;
+  Timer? _emitTimer;
 
-  /// Start listening to position updates (GPS-only fallback).
+  double get currentSpeedKmh => _speedKmh;
+  TransportMode get currentMode => _currentMode;
+
   Future<void> start() async {
     if (kIsWeb) return;
+
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
 
@@ -87,51 +85,69 @@ class MotionActivityService {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) return;
     }
-
-    _segmentStart = DateTime.now();
-    _previousActivity = MotionActivity(
-      mode: TransportMode.unknown,
-      timestamp: DateTime.now(),
-      confidence: 100,
-    );
+    if (permission == LocationPermission.deniedForever) return;
 
     _positionSubscription = Geolocator.getPositionStream(
       locationSettings: const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 10,
+        distanceFilter: 5,
       ),
-    ).listen((position) {
-      if (_previousPosition != null) {
-        final distance = Geolocator.distanceBetween(
-          _previousPosition!.latitude,
-          _previousPosition!.longitude,
-          position.latitude,
-          position.longitude,
-        );
-        _accumulatedDistanceKm += distance / 1000.0;
-      }
-      _previousPosition = position;
+    ).listen(_onPosition);
+
+    _emitTimer = Timer.periodic(Duration(seconds: emitIntervalSeconds), (_) {
+      _emitCurrentSegment();
     });
   }
 
-  /// Stop all monitoring and release resources.
-  void stop() {
-    _positionSubscription?.cancel();
-    if (_accumulatedDistanceKm >= minimumDistanceKm) {
-      final factor = _kgCo2ePerKm[_previousActivity?.mode ?? TransportMode.automotive] ?? 0.171;
-      onCarbonEstimate(TransportCarbonEstimate(
-        kgCo2e: factor * _accumulatedDistanceKm,
-        distanceKm: _accumulatedDistanceKm,
-        mode: _previousActivity?.mode ?? TransportMode.automotive,
-        calculatedAt: DateTime.now(),
-      ));
+  void _onPosition(Position position) {
+    final speedMs = position.speed.clamp(0.0, double.infinity).toDouble();
+    _speedKmh = speedMs * 3.6;
+
+    final newMode = _inferMode(_speedKmh);
+
+    if (_previousPosition != null) {
+      final distanceM = Geolocator.distanceBetween(
+        _previousPosition!.latitude,
+        _previousPosition!.longitude,
+        position.latitude,
+        position.longitude,
+      );
+      _accumulatedDistanceKm += distanceM / 1000.0;
     }
-    _reset();
+    _previousPosition = position;
+
+    if (newMode != _currentMode) {
+      if (_accumulatedDistanceKm >= minimumDistanceKm) {
+        _emitCurrentSegment();
+      }
+      _currentMode = newMode;
+      onModeChanged?.call(newMode, _speedKmh);
+    }
   }
 
-  void _reset() {
-    _segmentStart = null;
+  void _emitCurrentSegment() {
+    final dist = _accumulatedDistanceKm;
+    if (dist < minimumDistanceKm && _currentMode == TransportMode.stationary) return;
+    final factor = _kgCo2ePerKm[_currentMode] ?? 0.0;
+    onCarbonEstimate(TransportCarbonEstimate(
+      kgCo2e: factor * dist,
+      distanceKm: dist,
+      mode: _currentMode,
+      speedKmh: _speedKmh,
+      calculatedAt: DateTime.now(),
+    ));
     _accumulatedDistanceKm = 0.0;
+  }
+
+  void stop() {
+    _positionSubscription?.cancel();
+    _emitTimer?.cancel();
+    if (_accumulatedDistanceKm >= minimumDistanceKm) {
+      _emitCurrentSegment();
+    }
+    _currentMode = TransportMode.unknown;
+    _speedKmh = 0.0;
     _previousPosition = null;
+    _accumulatedDistanceKm = 0.0;
   }
 }
