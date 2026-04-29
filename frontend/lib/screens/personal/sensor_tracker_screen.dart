@@ -272,7 +272,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
           children: [
             AnimatedBuilder(
               animation: _pulseController,
-              builder: (_, __) => Container(
+              builder: (context, child) => Container(
                 width: 10,
                 height: 10,
                 decoration: BoxDecoration(
@@ -336,7 +336,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
           children: [
             AnimatedBuilder(
               animation: _ringAnim,
-              builder: (_, __) => SizedBox(
+              builder: (context, child) => SizedBox(
                 width: 130,
                 height: 130,
                 child: Stack(
@@ -440,7 +440,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
             Icon(
               _state.privacyShieldEnabled
                   ? Icons.shield_outlined
-                  : Icons.shield_off_outlined,
+                  : Icons.gpp_bad_outlined,
               color: _state.privacyShieldEnabled
                   ? AppTheme.emerald
                   : AppTheme.warning,
@@ -476,7 +476,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
               value: _state.privacyShieldEnabled,
               onChanged: (v) =>
                   setState(() => _state.privacyShieldEnabled = v),
-              activeColor: AppTheme.emerald,
+              activeThumbColor: AppTheme.emerald,
               inactiveThumbColor: AppTheme.warning,
             ),
           ],
@@ -569,7 +569,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                 const Spacer(),
                 AnimatedBuilder(
                   animation: _pulseController,
-                  builder: (_, __) => Container(
+                  builder: (context, child) => Container(
                     width: 8,
                     height: 8,
                     decoration: BoxDecoration(
