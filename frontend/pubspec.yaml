@@ -42,7 +42,7 @@ dependencies:
   provider: ^6.1.2
   battery_plus: ^5.0.3
   connectivity_plus: ^5.0.2
-  http: ^1.1.0
+  http: ^1.6.0
   flutter_activity_recognition: ^1.1.0
   permission_handler: ^11.0.1
   flutter_dotenv: ^5.1.0

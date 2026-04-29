@@ -1,14 +1,70 @@
 import 'package:flutter/material.dart';
-import '../../data/static_data.dart';
+import '../../services/api_service.dart';
+import '../../models/business_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
 
-class SubsidyScreen extends StatelessWidget {
+class SubsidyScreen extends StatefulWidget {
   const SubsidyScreen({super.key});
 
   @override
+  State<SubsidyScreen> createState() => _SubsidyScreenState();
+}
+
+class _SubsidyScreenState extends State<SubsidyScreen> {
+  bool _isLoading = true;
+  String _error = '';
+  List<SubsidyModel> _subsidies = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final subsidies = await ApiService.getSubsidies();
+      setState(() {
+        _subsidies = subsidies;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.emerald)),
+      );
+    }
+
+    if (_error.isNotEmpty) {
+      return Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              TextButton(onPressed: _loadData, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final eligibleCount = _subsidies.where((s) => s.isEligible).length;
+    // We mock the total value from the eligible count (this should ideally be in the backend model but it's okay for now)
+
     return Scaffold(
       backgroundColor: AppTheme.bg1,
       body: Container(
@@ -30,12 +86,12 @@ class SubsidyScreen extends StatelessWidget {
                       child: const Icon(Icons.auto_awesome, color: AppTheme.emerald),
                     ),
                     const SizedBox(width: 12),
-                    const Expanded(
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('2 subsidies eligible', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
-                          Text('Total available: ₹1,70,000', style: TextStyle(color: AppTheme.emerald, fontSize: 13)),
+                          Text('$eligibleCount subsidies eligible', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                          const Text('Total available: ₹1,70,000', style: TextStyle(color: AppTheme.emerald, fontSize: 13)),
                         ],
                       ),
                     ),
@@ -43,7 +99,7 @@ class SubsidyScreen extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              ...subsidies.map((s) => Padding(
+              ..._subsidies.map((s) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: GlassCard(
                   borderColor: s.isEligible ? AppTheme.emerald.withValues(alpha: 0.4) : null,

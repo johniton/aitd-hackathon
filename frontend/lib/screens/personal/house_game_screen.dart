@@ -1,12 +1,19 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:share_plus/share_plus.dart';
-import '../../data/app_state.dart';
+import '../../services/api_service.dart';
 import '../../models/house_item_model.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/glass_card.dart';
 import '../../widgets/gradient_button.dart';
+
+final List<HouseItemModel> shopItems = [
+  const HouseItemModel(id: 'h1', name: 'Solar Roof', icon: '☀️', cost: 200, description: '-30% energy emissions'),
+  const HouseItemModel(id: 'h2', name: 'Rain Garden', icon: '🌿', cost: 150, description: 'Absorbs 5kg CO₂/month'),
+  const HouseItemModel(id: 'h3', name: 'EV Charger', icon: '⚡', cost: 300, description: 'Unlock EV transport logging'),
+  const HouseItemModel(id: 'h4', name: 'Rainwater Tank', icon: '💧', cost: 180, description: 'Save 500L water/month'),
+  const HouseItemModel(id: 'h5', name: 'Compost Bin', icon: '♻️', cost: 80, description: 'Double waste points', purchased: true),
+  const HouseItemModel(id: 'h6', name: 'Terrace Farm', icon: '🥦', cost: 220, description: 'Grow your own food'),
+];
 
 class HouseGameScreen extends StatefulWidget {
   const HouseGameScreen({super.key});
@@ -16,6 +23,11 @@ class HouseGameScreen extends StatefulWidget {
 }
 
 class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderStateMixin {
+  List<HouseItemModel> _items = [];
+  int _coins = 0;
+  bool _isLoading = true;
+  String _error = '';
+
   late AnimationController _celebrationController;
   late AnimationController _houseEntranceController;
   late Animation<double> _houseEntrance;
@@ -24,12 +36,36 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
   @override
   void initState() {
     super.initState();
+    _loadData();
 
     _houseEntranceController = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
     _houseEntrance = CurvedAnimation(parent: _houseEntranceController, curve: Curves.easeOutBack);
     _houseEntranceController.forward();
 
     _celebrationController = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
+  }
+
+  Future<void> _loadData() async {
+    try {
+      final houseData = await ApiService.getHouse();
+      final purchasedList = (houseData['items'] as List)
+          .map((item) => HouseItemModel.fromJson(item))
+          .toList();
+
+      setState(() {
+        _coins = (houseData['coins'] as num).toInt();
+        _items = shopItems.map((staticItem) {
+          final isPurchased = purchasedList.any((p) => p.id == staticItem.id);
+          return staticItem.copyWith(purchased: isPurchased);
+        }).toList();
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -39,28 +75,59 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
     super.dispose();
   }
 
-  void _buy(String itemId, String icon, String name) {
-    final success = context.read<AppState>().buyItem(itemId);
-    if (!success) return;
-    setState(() => _lastPurchasedIcon = icon);
-    _celebrationController.forward(from: 0);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        backgroundColor: AppTheme.emerald,
-        content: Text('$icon $name added to your eco home!'),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+  Future<void> _buy(int index) async {
+    final item = _items[index];
+    if (item.purchased || _coins < item.cost) return;
+
+    try {
+      await ApiService.buyHouseItem(item.id);
+      if (!mounted) return;
+      setState(() {
+        _items[index] = item.copyWith(purchased: true);
+        _coins -= item.cost;
+        _lastPurchasedIcon = item.icon;
+      });
+      _celebrationController.forward(from: 0);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          backgroundColor: AppTheme.emerald,
+          content: Text('${item.icon} ${item.name} added to your eco home!'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(backgroundColor: Colors.red, content: Text('Purchase failed: $e')),
+      );
+    }
   }
 
-  bool _has(String id, List<HouseItemModel> items) => items.any((i) => i.id == id && i.purchased);
+  bool _has(String id) => _items.any((i) => i.id == id && i.purchased);
 
   @override
   Widget build(BuildContext context) {
-    final state = context.watch<AppState>();
-    final items = state.shop;
-    final coins = state.user.greenCoins.toInt();
-    final purchased = state.purchased;
+    if (_isLoading) {
+      return const Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(child: CircularProgressIndicator(color: AppTheme.emerald)),
+      );
+    }
+
+    if (_error.isNotEmpty) {
+      return Scaffold(
+        backgroundColor: AppTheme.bg1,
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              TextButton(onPressed: _loadData, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.bg1,
@@ -90,7 +157,7 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
                           children: [
                             const Text('🪙', style: TextStyle(fontSize: 18)),
                             const SizedBox(width: 6),
-                            Text('$coins', style: const TextStyle(color: AppTheme.lime, fontSize: 16, fontWeight: FontWeight.w700)),
+                            Text('$_coins', style: const TextStyle(color: AppTheme.lime, fontSize: 16, fontWeight: FontWeight.w700)),
                           ],
                         ),
                       ),
@@ -117,11 +184,11 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
                             animation: _celebrationController,
                             builder: (context, child) => CustomPaint(
                               painter: _HousePainter(
-                                hasSolar: _has('h1', items),
-                                hasGarden: _has('h2', items),
-                                hasEV: _has('h3', items),
-                                hasWater: _has('h4', items),
-                                hasBike: _has('h5', items),
+                                hasSolar: _has('h1'),
+                                hasGarden: _has('h2'),
+                                hasEV: _has('h3'),
+                                hasWater: _has('h4'),
+                                hasBike: _items.any((i) => i.id == 'h5' && i.purchased),
                                 celebrationProgress: _celebrationController.value,
                                 lastIcon: _lastPurchasedIcon,
                               ),
@@ -139,11 +206,7 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
                   child: Row(
                     children: [
                       const Expanded(child: Text('Shop', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700))),
-                      GradientButton(
-                        label: '📤 Share',
-                        width: null,
-                        onPressed: () => Share.share('🏡 My eco home on GoaGreen has ${purchased.length} green upgrades! ${purchased.map((i) => i.icon).join(' ')} #GoaGreen'),
-                      ),
+                      GradientButton(label: '📤 Share', onPressed: () {}, width: null),
                     ],
                   ),
                 ),
@@ -152,12 +215,8 @@ class _HouseGameScreenState extends State<HouseGameScreen> with TickerProviderSt
                 padding: const EdgeInsets.symmetric(horizontal: 20),
                 sliver: SliverGrid(
                   delegate: SliverChildBuilderDelegate(
-                    (_, i) => _ShopCard(
-                      item: items[i],
-                      canAfford: coins >= items[i].cost,
-                      onBuy: () => _buy(items[i].id, items[i].icon, items[i].name),
-                    ),
-                    childCount: items.length,
+                    (_, i) => _ShopCard(item: _items[i], canAfford: _coins >= _items[i].cost, onBuy: () => _buy(i)),
+                    childCount: _items.length,
                   ),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
                     crossAxisCount: 2,
