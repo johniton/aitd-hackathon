@@ -30,6 +30,21 @@ class EmissionFactors {
   static const double wasteComposted = 0.1;
   static const double wasteRecycled = 0.05;
 
+  // India grid electricity (kg CO2 per kWh) — CEA 2023
+  static const double gridElectricityIndia = 0.716;
+
+  // Combustion factors (kg CO2 per kg fuel)
+  static const double lpgCombustion = 2.98;
+  static const double firewoodCombustion = 1.62;
+  static const double dieselCombustion = 2.68;
+
+  // Waste (kg CO2e per kg)
+  static const double landfillOrganicWaste = 0.58;
+
+  // Agriculture
+  static const double chemicalFertilizerN2O = 0.01; // kg N2O-N per kg N fertilizer (IPCC Tier 1)
+  static const double floodIrrigationMethane = 0.0011; // kg CH4 per m2 per day (IPCC)
+
   // Goa-specific analogies
   static String analogy(double co2Kg) {
     if (co2Kg < 1) return '≈ ${(co2Kg * 10).toStringAsFixed(1)} hours of AC';
