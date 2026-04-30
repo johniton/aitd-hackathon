@@ -78,30 +78,46 @@ class TourismEngineController extends ChangeNotifier {
   TripLog? get activeTrip => _activeTrip;
 
   double get tripEmissions => _trips.fold(
-      0, (sum, t) => sum + (t.distanceKm * (_transportFactors[t.mode] ?? 0)));
-  double get energyEmissions => electricityKwh * EmissionFactors.gridElectricityIndia;
+    0,
+    (sum, t) => sum + (t.distanceKm * (_transportFactors[t.mode] ?? 0)),
+  );
+  double get energyEmissions =>
+      electricityKwh * EmissionFactors.gridElectricityIndia;
   double get lpgEmissions => lpgKg * EmissionFactors.lpgCombustion;
   double get dailyTotal {
     switch (sector) {
       case BusinessSector.tourism:
         return tripEmissions + energyEmissions + lpgEmissions;
       case BusinessSector.cashew:
-        return (roastingHours * (fuelType == 'firewood' ? EmissionFactors.firewoodCombustion * 1.5 : EmissionFactors.dieselCombustion * 1.0)) +
+        return (roastingHours *
+                (fuelType == 'firewood'
+                    ? EmissionFactors.firewoodCombustion * 1.5
+                    : EmissionFactors.dieselCombustion * 1.0)) +
             (electricityKwh * EmissionFactors.gridElectricityIndia) +
             (shellWasteKg * EmissionFactors.landfillOrganicWaste);
       case BusinessSector.farmer:
-        return (fertilizerKg * EmissionFactors.chemicalFertilizerN2O * 298) + // GWP of N2O is 298
+        return (fertilizerKg *
+                EmissionFactors.chemicalFertilizerN2O *
+                298) + // GWP of N2O is 298
             (pesticideL * 2.1) +
             (waterUsageL * 0.001) +
             (electricityKwh * EmissionFactors.gridElectricityIndia) +
-            (irrigationType == 'flood' ? EmissionFactors.floodIrrigationMethane * landAcres * 25 : 0); // Methane GWP 25
+            (irrigationType == 'flood'
+                ? EmissionFactors.floodIrrigationMethane * landAcres * 25
+                : 0); // Methane GWP 25
       case BusinessSector.bakery:
-        return (ovenHours * (ovenFuel == 'electric' ? EmissionFactors.gridElectricityIndia * 4 : EmissionFactors.firewoodCombustion * 2.5)) +
+        return (ovenHours *
+                (ovenFuel == 'electric'
+                    ? EmissionFactors.gridElectricityIndia * 4
+                    : EmissionFactors.firewoodCombustion * 2.5)) +
             (flourKg * 0.04) +
             (butterKg * 0.12) +
             (breadWasteKg * EmissionFactors.landfillOrganicWaste);
       case BusinessSector.other:
-        return (electricityKwh * (otherEnergySource == 'grid' ? EmissionFactors.gridElectricityIndia : 0.1)) +
+        return (electricityKwh *
+                (otherEnergySource == 'grid'
+                    ? EmissionFactors.gridElectricityIndia
+                    : 0.1)) +
             (otherWaterUsageL * 0.001) +
             (organicWasteKg * EmissionFactors.landfillOrganicWaste) +
             (oilWasteKg * 2.0);
@@ -115,17 +131,24 @@ class TourismEngineController extends ChangeNotifier {
       ((dailyTotal - lastWeekAverage) / lastWeekAverage) * 100;
   double get simulatedCarbonSaved => dailyTotal * (simulationPercent / 100);
   double get simulatedMoneySaved => simulatedCarbonSaved * 2;
-  
+
   double _actionPlanBonus = 0.0;
   void updateActionPlanBonus(double rate) {
-    if (rate == 1.0) _actionPlanBonus = 20.0;
-    else if (rate >= 0.66) _actionPlanBonus = 10.0;
-    else if (rate >= 0.33) _actionPlanBonus = 5.0;
-    else _actionPlanBonus = 0.0;
+    if (rate == 1.0)
+      _actionPlanBonus = 20.0;
+    else if (rate >= 0.66)
+      _actionPlanBonus = 10.0;
+    else if (rate >= 0.33)
+      _actionPlanBonus = 5.0;
+    else
+      _actionPlanBonus = 0.0;
     notifyListeners();
   }
-  
-  double get ecoScore => ((100 - (dailyTotal * 1.2)).clamp(15, 98) + _actionPlanBonus).clamp(15, 100).toDouble();
+
+  double get ecoScore =>
+      ((100 - (dailyTotal * 1.2)).clamp(15, 98) + _actionPlanBonus)
+          .clamp(15, 100)
+          .toDouble();
 
   String get badge {
     if (ecoScore > 80) return 'Gold Pathfinder';
@@ -334,12 +357,14 @@ class TourismEngineController extends ChangeNotifier {
     final matches = <SubsidyMatch>[];
     if (latestSustainabilityPlan != null &&
         latestSustainabilityPlan!.subsidy.name.isNotEmpty) {
-      matches.add(SubsidyMatch(
-        title: latestSustainabilityPlan!.subsidy.name,
-        amount: latestSustainabilityPlan!.subsidy.amount,
-        description: latestSustainabilityPlan!.subsidy.reason,
-        isEligible: true,
-      ));
+      matches.add(
+        SubsidyMatch(
+          title: latestSustainabilityPlan!.subsidy.name,
+          amount: latestSustainabilityPlan!.subsidy.amount,
+          description: latestSustainabilityPlan!.subsidy.reason,
+          isEligible: true,
+        ),
+      );
     }
     return matches;
   }
@@ -365,18 +390,23 @@ class TourismEngineController extends ChangeNotifier {
   // ════════════════════════════════════════════════
 
   String _buildPrompt() {
-    switch (sector) {
-      case BusinessSector.tourism:
-        return _tourismPrompt();
-      case BusinessSector.cashew:
-        return _cashewPrompt();
-      case BusinessSector.farmer:
-        return _farmerPrompt();
-      case BusinessSector.bakery:
-        return _bakeryPrompt();
-      case BusinessSector.other:
-        return _otherPrompt();
-    }
+    final sectorPrompt = switch (sector) {
+      BusinessSector.tourism => _tourismPrompt(),
+      BusinessSector.cashew => _cashewPrompt(),
+      BusinessSector.farmer => _farmerPrompt(),
+      BusinessSector.bakery => _bakeryPrompt(),
+      BusinessSector.other => _otherPrompt(),
+    };
+    return '''
+$sectorPrompt
+
+Global output quality rules:
+- Avoid generic advice like "go green", "optimize resources", "improve sustainability".
+- Every plan step must include: action + expected carbon effect + rough timeline.
+- Use Indian rupees and realistic ranges.
+- Mention one Goa-local implementation detail in at least 2 plan steps.
+- Keep output practical for small and medium businesses, not only large enterprises.
+''';
   }
 
   String _tourismPrompt() {
@@ -591,7 +621,7 @@ Return JSON:
             {
               'role': 'system',
               'content':
-                  'Return only valid JSON. No markdown. No text outside JSON.'
+                  'Return only valid JSON. No markdown. No text outside JSON.',
             },
             {'role': 'user', 'content': prompt},
           ],
@@ -613,8 +643,7 @@ Return JSON:
     try {
       return jsonDecode(text) as Map<String, dynamic>;
     } catch (_) {}
-    final cleaned =
-        text.replaceAll('```json', '').replaceAll('```', '').trim();
+    final cleaned = text.replaceAll('```json', '').replaceAll('```', '').trim();
     try {
       return jsonDecode(cleaned) as Map<String, dynamic>;
     } catch (_) {}
@@ -679,7 +708,8 @@ Return JSON:
       emissions: (currentData['carbon'] ?? '').toString(),
       insight: (result['insight'] ?? '').toString(),
       betterOption: '',
-      ecoItinerary: (optimizedData['plan'] is List &&
+      ecoItinerary:
+          (optimizedData['plan'] is List &&
               (optimizedData['plan'] as List).isNotEmpty)
           ? (optimizedData['plan'] as List).first.toString()
           : '',
@@ -694,8 +724,9 @@ Return JSON:
   }
 
   void _useFallback() {
-    latestSustainabilityPlan =
-        SustainabilityPlan.fallback(dailyTotal: dailyTotal);
+    latestSustainabilityPlan = SustainabilityPlan.fallback(
+      dailyTotal: dailyTotal,
+    );
     latestInsight = GeminiInsight.fallback(
       emissions: '${dailyTotal.toStringAsFixed(1)} kg CO2 today',
       betterOption: 'Switch to sustainable alternatives',
@@ -724,7 +755,8 @@ Return JSON:
 
     final sectorContext = _buildCarbonCreditContext();
 
-    final prompt = '''
+    final prompt =
+        '''
 You are a carbon credit market expert specializing in India's CCTS (Carbon Credit Trading Scheme) and the global Voluntary Carbon Market (VCM).
 
 A Goa-based business needs a COMPLETE carbon credit analysis.
@@ -817,44 +849,52 @@ CRITICAL RULES — follow these exactly:
       final annualEmissions = (dailyTotal * 365).round();
       carbonCreditAnalysis = {
         'verdict': annualEmissions > 5000 ? 'BUYER' : 'BOTH',
-        'verdict_reason': 'Based on estimated annual emissions of ${annualEmissions}kg CO2e.',
+        'verdict_reason':
+            'Based on estimated annual emissions of ${annualEmissions}kg CO2e.',
         'annual_emissions_kg': annualEmissions,
         'credit_opportunities': [
           {
             'type': 'Energy Efficiency Upgrade',
-            'mechanism': 'Switching to solar/efficient equipment generates avoidance credits.',
+            'mechanism':
+                'Switching to solar/efficient equipment generates avoidance credits.',
             'potential_credits': (annualEmissions * 0.3 / 1000).round(),
-            'estimated_revenue': 'Rs ${(annualEmissions * 0.3 * 0.4).round()} - Rs ${(annualEmissions * 0.3 * 1.2).round()} per year',
+            'estimated_revenue':
+                'Rs ${(annualEmissions * 0.3 * 0.4).round()} - Rs ${(annualEmissions * 0.3 * 1.2).round()} per year',
             'registry': 'Verra VCS',
             'difficulty': 'Medium',
             'timeline': '12-18 months',
             'is_creditable': true,
             'viable_for_market': (annualEmissions * 0.3 / 1000) > 50,
             'requires_capital_investment': true,
-            'minimum_capex_inr': 1500000
-          }
+            'minimum_capex_inr': 1500000,
+          },
         ],
-        'offset_cost': 'Rs ${(annualEmissions / 1000 * 400).round()} per year at voluntary market rates',
-        'net_position': 'Net emitter: +${(annualEmissions / 1000).toStringAsFixed(1)} tonnes CO2e/year',
+        'offset_cost':
+            'Rs ${(annualEmissions / 1000 * 400).round()} per year at voluntary market rates',
+        'net_position':
+            'Net emitter: +${(annualEmissions / 1000).toStringAsFixed(1)} tonnes CO2e/year',
         'action_plan': [
           'Step 1: Calculate precise Scope 1, 2, 3 emissions',
           'Step 2: Identify reduction opportunities before buying offsets',
-          'Step 3: Register with Verra or Gold Standard for credit generation'
+          'Step 3: Register with Verra or Gold Standard for credit generation',
         ],
         'india_schemes': [
           {
             'scheme': 'India CCTS',
-            'relevance': 'New national carbon trading scheme — monitor for SME inclusion',
+            'relevance':
+                'New national carbon trading scheme — monitor for SME inclusion',
             'potential_benefit': 'Market access when scheme expands',
-            'official_url': 'https://beeindia.gov.in'
-          }
+            'official_url': 'https://beeindia.gov.in',
+          },
         ],
-        'market_insight': 'The voluntary carbon market is projected to grow 8x by 2030. Early movers in credit generation will benefit from rising prices.',
+        'market_insight':
+            'The voluntary carbon market is projected to grow 8x by 2030. Early movers in credit generation will benefit from rising prices.',
         'analysis_confidence': {
           'score': 6,
-          'reason': 'Offline fallback calculation based on basic sector averages.',
-          'is_standard_sector': true
-        }
+          'reason':
+              'Offline fallback calculation based on basic sector averages.',
+          'is_standard_sector': true,
+        },
       };
     }
 
@@ -864,25 +904,34 @@ CRITICAL RULES — follow these exactly:
 
   bool _validateCarbonCreditResponse(Map<String, dynamic> result) {
     try {
-      if (!result.containsKey('verdict') || !result.containsKey('credit_opportunities')) return false;
-      
+      if (!result.containsKey('verdict') ||
+          !result.containsKey('credit_opportunities'))
+        return false;
+
       final opps = result['credit_opportunities'] as List?;
       if (opps != null) {
         for (var opp in opps) {
-          if (opp['potential_credits'] == null || opp['potential_credits'] is! num) return false;
-          if (opp['estimated_revenue'] == null || !opp['estimated_revenue'].toString().contains('-')) return false;
+          if (opp['potential_credits'] == null ||
+              opp['potential_credits'] is! num)
+            return false;
+          if (opp['estimated_revenue'] == null ||
+              !opp['estimated_revenue'].toString().contains('-'))
+            return false;
           if (opp['registry'] == null) return false;
         }
       }
-      
+
       final schemes = result['india_schemes'] as List?;
       if (schemes != null) {
         for (var scheme in schemes) {
           final url = scheme['official_url'];
-          if (url != null && url.toString().isNotEmpty && !url.toString().startsWith('http')) return false;
+          if (url != null &&
+              url.toString().isNotEmpty &&
+              !url.toString().startsWith('http'))
+            return false;
         }
       }
-      
+
       return true;
     } catch (e) {
       return false;

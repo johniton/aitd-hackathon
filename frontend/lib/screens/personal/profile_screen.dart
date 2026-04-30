@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:provider/provider.dart';
-import '../../data/app_state.dart';
 import '../../models/activity_model.dart';
 import '../../services/api_service.dart';
 import '../../models/user_model.dart';
@@ -28,6 +26,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
   List<ActivityModel> _activities = const [];
   String _aiSummary = '';
   List<String> _aiSuggestions = const [];
+  final PageController _whatIfController = PageController(
+    viewportFraction: 0.9,
+  );
 
   @override
   void initState() {
@@ -176,6 +177,36 @@ Keep suggestions practical for Goa/India.
     ];
   }
 
+  List<_WhatIfCardData> _buildWhatIfCards() {
+    final generated = _co2Generated;
+    return [
+      _WhatIfCardData(
+        title: 'What If: 3 Car Trips to Bus',
+        impactKg: generated * 0.12,
+        detail:
+            'Switching just 3 weekly short car rides to bus lowers transport emissions significantly.',
+      ),
+      _WhatIfCardData(
+        title: 'What If: 4 Meat Meals to Veg',
+        impactKg: generated * 0.10,
+        detail:
+            'Replacing 4 meat-heavy meals per week cuts food footprint while staying practical.',
+      ),
+      _WhatIfCardData(
+        title: 'What If: AC +1°C + Fan First',
+        impactKg: generated * 0.08,
+        detail:
+            'Raising AC setpoint and using fan-first habit can reduce daily electricity emissions.',
+      ),
+    ];
+  }
+
+  @override
+  void dispose() {
+    _whatIfController.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
@@ -192,7 +223,10 @@ Keep suggestions practical for Goa/India.
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Error: $_error', style: const TextStyle(color: AppTheme.accentRed)),
+              Text(
+                'Error: $_error',
+                style: const TextStyle(color: AppTheme.accentRed),
+              ),
               TextButton(onPressed: _loadData, child: const Text('Retry')),
             ],
           ),
@@ -246,6 +280,8 @@ Keep suggestions practical for Goa/India.
                         children: [
                           Text(
                             currentUser.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: AppTheme.textPrimary,
                               fontSize: 18,
@@ -254,6 +290,8 @@ Keep suggestions practical for Goa/India.
                           ),
                           Text(
                             '📍 ${currentUser.city}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: const TextStyle(
                               color: AppTheme.textSecondary,
                               fontSize: 13,
@@ -267,6 +305,8 @@ Keep suggestions practical for Goa/India.
                       children: [
                         Text(
                           '#${currentUser.rank}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: AppTheme.emerald,
                             fontSize: 20,
@@ -413,7 +453,7 @@ Keep suggestions practical for Goa/India.
               ),
               const SizedBox(height: 20),
               const Text(
-                'Badges',
+                'What-If Simulator',
                 style: TextStyle(
                   color: AppTheme.textPrimary,
                   fontSize: 16,
@@ -421,30 +461,53 @@ Keep suggestions practical for Goa/India.
                 ),
               ),
               const SizedBox(height: 12),
-              Consumer<AppState>(
-                builder: (context, appState, _) {
-                  final badges = appState.earnedBadges;
-                  return GlassCard(
-                    child: badges.isEmpty
-                        ? const Padding(
-                            padding: EdgeInsets.all(8),
-                            child: Text(
-                              'Log activities to earn badges!',
-                              style: TextStyle(
-                                color: AppTheme.textSecondary,
-                                fontSize: 13,
-                              ),
+              SizedBox(
+                height: 150,
+                child: PageView(
+                  controller: _whatIfController,
+                  children: _buildWhatIfCards()
+                      .map(
+                        (w) => Padding(
+                          padding: const EdgeInsets.only(right: 10),
+                          child: GlassCard(
+                            borderColor: AppTheme.emerald.withValues(
+                              alpha: 0.35,
                             ),
-                          )
-                        : Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: badges
-                                .map((b) => _Badge(b.emoji, b.label))
-                                .toList(),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  w.title,
+                                  style: const TextStyle(
+                                    color: AppTheme.textPrimary,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Potential cut: ${w.impactKg.toStringAsFixed(2)} kg CO₂/week',
+                                  style: const TextStyle(
+                                    color: AppTheme.emerald,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  w.detail,
+                                  style: const TextStyle(
+                                    color: AppTheme.textSecondary,
+                                    fontSize: 12,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                  );
-                },
+                        ),
+                      )
+                      .toList(),
+                ),
               ),
               const SizedBox(height: 20),
               const Text(
@@ -490,6 +553,17 @@ Keep suggestions practical for Goa/India.
   }
 }
 
+class _WhatIfCardData {
+  final String title;
+  final double impactKg;
+  final String detail;
+  const _WhatIfCardData({
+    required this.title,
+    required this.impactKg,
+    required this.detail,
+  });
+}
+
 class _StatBox extends StatelessWidget {
   final String emoji;
   final String value;
@@ -520,39 +594,6 @@ class _StatBox extends StatelessWidget {
             label,
             textAlign: TextAlign.center,
             style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Badge extends StatelessWidget {
-  final String emoji;
-  final String label;
-  const _Badge(this.emoji, this.label);
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: AppTheme.emerald.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(emoji, style: const TextStyle(fontSize: 14)),
-          const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(
-              color: AppTheme.emerald,
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-            ),
           ),
         ],
       ),

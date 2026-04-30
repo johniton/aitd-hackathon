@@ -267,17 +267,26 @@ class _GreenMapScreenState extends State<GreenMapScreen> {
       );
     }
 
-    final maxCoins = _hotspots
-        .map((h) => h.coinTotal)
-        .fold<double>(0, (prev, curr) => curr > prev ? curr : prev);
+    final sortedCoins = _hotspots.map((h) => h.coinTotal).toList()..sort();
+    final lowCut =
+        sortedCoins[(sortedCoins.length * 0.33).floor().clamp(
+          0,
+          sortedCoins.length - 1,
+        )];
+    final highCut =
+        sortedCoins[(sortedCoins.length * 0.66).floor().clamp(
+          0,
+          sortedCoins.length - 1,
+        )];
+    final maxCoins = sortedCoins.isEmpty ? 0.0 : sortedCoins.last;
     final heatCircles = <CircleMarker>[];
     for (final hotspot in _hotspots) {
       final weight = maxCoins <= 0
           ? 0.1
           : (hotspot.coinTotal / maxCoins).clamp(0.1, 1.0);
-      final zoneColor = weight >= 0.66
+      final zoneColor = hotspot.coinTotal >= highCut
           ? AppTheme.emerald
-          : weight >= 0.33
+          : hotspot.coinTotal >= lowCut
           ? AppTheme.accentAmber
           : AppTheme.accentRed;
       heatCircles.addAll([
@@ -332,9 +341,7 @@ class _GreenMapScreenState extends State<GreenMapScreen> {
                 child: Container(
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: selected
-                        ? AppTheme.emerald
-                        : AppTheme.surface,
+                    color: selected ? AppTheme.emerald : AppTheme.surface,
                     border: Border.all(
                       color: selected ? AppTheme.bg1 : AppTheme.lime,
                       width: 2,
