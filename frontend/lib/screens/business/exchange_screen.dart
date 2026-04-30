@@ -1500,6 +1500,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               ),
             ],
           ),
+          ),
         ),
       ),
     );

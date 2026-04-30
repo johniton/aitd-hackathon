@@ -282,20 +282,36 @@ class _LogActivityScreenState extends State<LogActivityScreen> with SingleTicker
       final bytes = await File(file.path).readAsBytes();
       final base64Image = base64Encode(bytes);
 
-      const prompt = '''You are a carbon footprint analyser for an Indian eco app called GoaGreen.
-Analyse this receipt/bill image and return ONLY a valid JSON object with these exact keys:
+      const prompt = '''You are a senior carbon footprint analyst for GoaGreen, an Indian sustainability app.
+Analyse this receipt/bill/product image thoroughly using Indian emission factors (India grid: ~700 gCO₂/kWh, Indian food system, IPCC AR6 spend-based).
+
+Return ONLY a valid JSON object with these EXACT keys (no markdown, no explanation):
 {
-  "merchant": "<shop or restaurant name>",
-  "category": "<one of: food, transport, energy, shopping, groceries>",
-  "items": ["<item1>", "<item2>"],
-  "total_inr": <number>,
-  "co2_kg": <estimated kg CO2e as a number>,
-  "is_eco": <true if this purchase is eco-friendly, false otherwise>,
-  "coins": <GreenCoins to award: 20 if eco, 5 if not>,
-  "insight": "<one sentence eco insight about this purchase in Indian context>"
+  "merchant": "<shop/restaurant/brand name visible on image>",
+  "merchant_type": "<e.g. Restaurant, Supermarket, Petrol Pump, Online Delivery, Street Vendor>",
+  "category": "<one of: food, transport, energy, shopping, groceries, personal_care, electronics>",
+  "items": [
+    {"name": "<item name>", "qty": "<quantity or weight>", "price_inr": <price as number or 0>, "co2_kg": <CO2 for this item as number>}
+  ],
+  "total_inr": <total bill amount as number>,
+  "co2_kg": <total estimated kg CO2e as a number>,
+  "eco_score": <1 to 10, where 10 is most eco-friendly>,
+  "eco_grade": "<A+ / A / B / C / D / F based on eco_score>",
+  "is_eco": <true if eco_score >= 7>,
+  "coins": <GreenCoins: 25 if A+/A, 15 if B, 10 if C, 5 if D/F>,
+  "insight": "<one detailed sentence about the environmental impact of this purchase in Indian context>",
+  "green_alternatives": ["<practical greener alternative 1>", "<practical greener alternative 2>"],
+  "equivalence": "<real-world CO2 comparison, e.g. 'Same as driving an auto-rickshaw 4.2 km in Goa' or 'Equivalent to charging your phone 85 times'>",
+  "tip": "<one actionable tip to reduce carbon footprint for this type of purchase>"
 }
-Base your CO2 estimate on typical Indian emission factors. Be concise and accurate.
-Return ONLY the JSON, no markdown, no explanation.''';
+
+Rules:
+- For food: factor in cooking fuel (LPG), cold chain, meat vs veg, packaging, delivery vehicle if applicable.
+- For transport: use Indian vehicle fleet averages (petrol auto ~95g/km, petrol car ~171g/km, EV ~20g/km).
+- For shopping: consider manufacturing, shipping from China/India, packaging waste.
+- Always give specific Indian examples in equivalence (auto rides, chai cups, phone charges, tree absorption days).
+- If you can't read the image clearly, make your best estimate and note it in the insight.
+Return ONLY the JSON.''';
 
       final response = await http.post(
         Uri.parse('${AppEnv.sneakyApiUrl}/api/analyze/base64'),
@@ -390,105 +406,385 @@ Return ONLY the JSON, no markdown, no explanation.''';
     if (result != null) {
       final co2 = (result['co2_kg'] as num?)?.toDouble() ?? 0.0;
       final isEco = result['is_eco'] as bool? ?? false;
-      final coins = result['coins'] as int? ?? 5;
-      final items = (result['items'] as List?)?.cast<String>() ?? [];
+      final coins = (result['coins'] as num?)?.toInt() ?? 5;
+      final ecoScore = (result['eco_score'] as num?)?.toInt() ?? 5;
+      final ecoGrade = result['eco_grade'] as String? ?? 'C';
+      final merchantType = result['merchant_type'] as String? ?? '';
+      final totalInr = (result['total_inr'] as num?)?.toDouble() ?? 0.0;
+      final equivalence = result['equivalence'] as String? ?? '';
+      final tip = result['tip'] as String? ?? '';
+      final greenAlts = (result['green_alternatives'] as List?)?.cast<String>() ?? [];
+
+      // Parse items — handle both old format (List<String>) and new format (List<Map>)
+      final rawItems = result['items'] as List? ?? [];
+      final List<Map<String, dynamic>> itemMaps = [];
+      for (final item in rawItems) {
+        if (item is Map) {
+          itemMaps.add(Map<String, dynamic>.from(item));
+        } else if (item is String) {
+          itemMaps.add({'name': item, 'qty': '1', 'price_inr': 0, 'co2_kg': 0.0});
+        }
+      }
+
+      // Eco grade color
+      Color gradeColor;
+      if (ecoScore >= 8) {
+        gradeColor = AppTheme.emerald;
+      } else if (ecoScore >= 6) {
+        gradeColor = AppTheme.lime;
+      } else if (ecoScore >= 4) {
+        gradeColor = const Color(0xFFFBBF24); // amber
+      } else {
+        gradeColor = const Color(0xFFEF4444); // red
+      }
 
       return SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // ── Header: Image + Merchant + Grade Badge ──
             Row(
               children: [
                 if (_receiptImage != null)
                   ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.file(File(_receiptImage!.path), height: 80, width: 80, fit: BoxFit.cover),
+                    borderRadius: BorderRadius.circular(14),
+                    child: Image.file(File(_receiptImage!.path), height: 90, width: 90, fit: BoxFit.cover),
                   ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(result['merchant'] as String? ?? 'Receipt', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
-                      Text(result['category'] as String? ?? '', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                      Text(result['merchant'] as String? ?? 'Receipt',
+                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 20, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 2),
+                      Text(merchantType,
+                          style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                      const SizedBox(height: 4),
+                      Text(result['category']?.toString().toUpperCase() ?? '',
+                          style: TextStyle(color: AppTheme.emerald.withValues(alpha: 0.8), fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.5)),
                     ],
+                  ),
+                ),
+                // Eco grade badge
+                Container(
+                  width: 52, height: 52,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: gradeColor.withValues(alpha: 0.15),
+                    border: Border.all(color: gradeColor, width: 2.5),
+                  ),
+                  child: Center(
+                    child: Text(ecoGrade,
+                      style: TextStyle(color: gradeColor, fontSize: 18, fontWeight: FontWeight.w900)),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 20),
+
+            // ── CO₂ Impact Card ──
             GlassCard(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
                     children: [
-                      const Text('CO₂ Impact', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                      const Text('Carbon Footprint', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
                       const Spacer(),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: (isEco ? AppTheme.emerald : AppTheme.warning).withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
+                          color: gradeColor.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: gradeColor.withValues(alpha: 0.4)),
                         ),
-                        child: Text(
-                          isEco ? '✅ Eco Purchase' : '⚠️ Carbon Added',
-                          style: TextStyle(color: isEco ? AppTheme.emerald : AppTheme.warning, fontSize: 11, fontWeight: FontWeight.w600),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(isEco ? Icons.eco : Icons.warning_amber_rounded, color: gradeColor, size: 14),
+                            const SizedBox(width: 4),
+                            Text(
+                              isEco ? 'Eco-Friendly' : 'High Carbon',
+                              style: TextStyle(color: gradeColor, fontSize: 11, fontWeight: FontWeight.w700),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text('${co2.toStringAsFixed(3)}',
+                          style: const TextStyle(color: AppTheme.textPrimary, fontSize: 36, fontWeight: FontWeight.w800)),
+                      const SizedBox(width: 6),
+                      const Padding(
+                        padding: EdgeInsets.only(bottom: 6),
+                        child: Text('kg CO₂e', style: TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+                      ),
+                      const Spacer(),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text('₹${totalInr.toStringAsFixed(0)}',
+                              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+                          const Text('bill total', style: TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
+                        ],
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 8),
-                  Text('${co2.toStringAsFixed(3)} kg CO₂', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 28, fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 4),
+                  // Eco score bar
+                  Row(
+                    children: [
+                      const Text('Eco Score', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(4),
+                          child: LinearProgressIndicator(
+                            value: ecoScore / 10,
+                            backgroundColor: AppTheme.surface,
+                            color: gradeColor,
+                            minHeight: 6,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('$ecoScore/10', style: TextStyle(color: gradeColor, fontSize: 12, fontWeight: FontWeight.w700)),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
                   Text(EmissionFactors.analogy(co2), style: const TextStyle(color: AppTheme.emerald, fontSize: 12)),
                 ],
               ),
             ),
             const SizedBox(height: 12),
-            if (items.isNotEmpty)
+
+            // ── Real-World Equivalence ──
+            if (equivalence.isNotEmpty)
+              GlassCard(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF818CF8).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.compare_arrows, color: Color(0xFF818CF8), size: 22),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Real-World Impact', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 4),
+                          Text(equivalence,
+                              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600, height: 1.3)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (equivalence.isNotEmpty) const SizedBox(height: 12),
+
+            // ── Per-Item Breakdown ──
+            if (itemMaps.isNotEmpty)
               GlassCard(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Items Detected', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 8),
-                    ...items.map((item) => Padding(
-                      padding: const EdgeInsets.only(bottom: 4),
-                      child: Row(
+                    Row(
+                      children: [
+                        const Icon(Icons.receipt_long, color: AppTheme.emerald, size: 18),
+                        const SizedBox(width: 8),
+                        const Text('Item Breakdown', style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                        const Spacer(),
+                        Text('${itemMaps.length} items', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    ...itemMaps.map((item) {
+                      final itemCo2 = (item['co2_kg'] as num?)?.toDouble() ?? 0.0;
+                      final itemPrice = (item['price_inr'] as num?)?.toDouble() ?? 0.0;
+                      final fraction = co2 > 0 ? (itemCo2 / co2).clamp(0.0, 1.0) : 0.0;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(item['name']?.toString() ?? '',
+                                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, fontWeight: FontWeight.w600)),
+                                ),
+                                if (itemPrice > 0)
+                                  Text('₹${itemPrice.toStringAsFixed(0)}',
+                                      style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                                const SizedBox(width: 12),
+                                Text('${itemCo2.toStringAsFixed(3)} kg',
+                                    style: TextStyle(color: itemCo2 > 0.5 ? const Color(0xFFFBBF24) : AppTheme.emerald, fontSize: 12, fontWeight: FontWeight.w700)),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Text(item['qty']?.toString() ?? '', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 10)),
+                                const Spacer(),
+                              ],
+                            ),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: fraction,
+                                backgroundColor: AppTheme.surface,
+                                color: itemCo2 > 0.5 ? const Color(0xFFFBBF24) : AppTheme.emerald,
+                                minHeight: 3,
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                ),
+              ),
+            if (itemMaps.isNotEmpty) const SizedBox(height: 12),
+
+            // ── Insight ──
+            if (result['insight'] != null)
+              GlassCard(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.emerald.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: const Icon(Icons.lightbulb_outline, color: AppTheme.emerald, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('• ', style: TextStyle(color: AppTheme.emerald)),
-                          Expanded(child: Text(item, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
+                          const Text('AI Insight', style: TextStyle(color: AppTheme.textSecondary, fontSize: 11, fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 4),
+                          Text(result['insight'] as String,
+                              style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, height: 1.4)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            if (result['insight'] != null) const SizedBox(height: 12),
+
+            // ── Green Alternatives ──
+            if (greenAlts.isNotEmpty)
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.swap_horiz, color: AppTheme.lime, size: 18),
+                        SizedBox(width: 8),
+                        Text('Greener Alternatives', style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ...greenAlts.map((alt) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('🌿 ', style: TextStyle(fontSize: 14)),
+                          Expanded(child: Text(alt, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.3))),
                         ],
                       ),
                     )),
                   ],
                 ),
               ),
-            const SizedBox(height: 12),
-            if (result['insight'] != null)
-              GlassCard(
+            if (greenAlts.isNotEmpty) const SizedBox(height: 12),
+
+            // ── Actionable Tip ──
+            if (tip.isNotEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [
+                    AppTheme.emerald.withValues(alpha: 0.08),
+                    AppTheme.lime.withValues(alpha: 0.08),
+                  ]),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.2)),
+                ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('💡 ', style: TextStyle(fontSize: 16)),
+                    const Text('💡', style: TextStyle(fontSize: 18)),
+                    const SizedBox(width: 10),
                     Expanded(
-                      child: Text(result['insight'] as String, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4)),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Pro Tip', style: TextStyle(color: AppTheme.emerald, fontSize: 12, fontWeight: FontWeight.w700)),
+                          const SizedBox(height: 4),
+                          Text(tip, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13, height: 1.4)),
+                        ],
+                      ),
                     ),
                   ],
                 ),
               ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
+
+            // ── GreenCoins + Log Button ──
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                color: AppTheme.surface,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('🪙', style: TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Text('+$coins GreenCoins',
+                      style: const TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 4),
+                  Text(isEco ? '(Eco Bonus!)' : '',
+                      style: const TextStyle(color: AppTheme.emerald, fontSize: 12)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
             GradientButton(
-              label: 'Log Activity  +$coins GreenCoins',
+              label: 'Log Activity',
               onPressed: _logReceiptActivity,
               icon: Icons.check,
               width: double.infinity,
             ),
             const SizedBox(height: 12),
-            TextButton(
-              onPressed: () => setState(() { _receiptImage = null; _receiptResult = null; }),
-              child: const Text('Scan another receipt', style: TextStyle(color: AppTheme.emerald)),
+            Center(
+              child: TextButton(
+                onPressed: () => setState(() { _receiptImage = null; _receiptResult = null; }),
+                child: const Text('Scan another receipt', style: TextStyle(color: AppTheme.emerald)),
+              ),
             ),
           ],
         ),
