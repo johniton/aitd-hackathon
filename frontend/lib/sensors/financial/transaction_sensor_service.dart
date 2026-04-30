@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math';
+
 // Financial Automation — Transaction-Based (Scope 3, India-specific)
 // Receives UPI / card transaction payloads and automatically maps
 // Merchant Category Codes (MCCs) to CO₂ factors calibrated for India.
@@ -45,20 +48,20 @@ class SpendCarbonFactor {
 
 /// Broad MCC groupings relevant to India.
 enum MccCategory {
-  petrolPump,       // IOCL / BPCL / HPCL / Reliance pumps
-  lpgCng,           // Indane LPG, HP Gas, IGL CNG
-  twoWheelerFuel,   // Petrol for bikes / scooters
-  cabRideHail,      // Ola, Uber, Rapido Cab
-  autoRickshaw,     // Ola Auto, Rapido Auto, Namma Yatri (CNG)
-  domesticFlight,   // IndiGo, Air India, SpiceJet, GoFirst
-  indianRailways,   // IRCTC / IR ticket purchase
-  metro,            // Delhi Metro, Mumbai Metro, Namma Metro, etc.
-  cityBus,          // BEST, DTC, KSRTC, BMTC, TSRTC city buses
-  restaurant,       // Dine-in restaurants, dhabas
-  foodDelivery,     // Swiggy, Zomato (includes delivery vehicle)
-  grocery,          // BigBasket, Blinkit, D-Mart, More, local kirana
-  ecommerce,        // Flipkart, Amazon India, Meesho, Myntra
-  utilities,        // MSEDCL, BESCOM, Tata Power, CESC electricity bills
+  petrolPump, // IOCL / BPCL / HPCL / Reliance pumps
+  lpgCng, // Indane LPG, HP Gas, IGL CNG
+  twoWheelerFuel, // Petrol for bikes / scooters
+  cabRideHail, // Ola, Uber, Rapido Cab
+  autoRickshaw, // Ola Auto, Rapido Auto, Namma Yatri (CNG)
+  domesticFlight, // IndiGo, Air India, SpiceJet, GoFirst
+  indianRailways, // IRCTC / IR ticket purchase
+  metro, // Delhi Metro, Mumbai Metro, Namma Metro, etc.
+  cityBus, // BEST, DTC, KSRTC, BMTC, TSRTC city buses
+  restaurant, // Dine-in restaurants, dhabas
+  foodDelivery, // Swiggy, Zomato (includes delivery vehicle)
+  grocery, // BigBasket, Blinkit, D-Mart, More, local kirana
+  ecommerce, // Flipkart, Amazon India, Meesho, Myntra
+  utilities, // MSEDCL, BESCOM, Tata Power, CESC electricity bills
   other,
 }
 
@@ -66,55 +69,49 @@ enum MccCategory {
 /// Focused on merchants dominant in the Indian market.
 const Map<int, MccCategory> _mccToCategory = {
   // ── Petrol Pumps ──────────────────────────────────────────────────────────
-  5541: MccCategory.petrolPump,   // Service Stations (IOCL, BPCL, HPCL)
-  5542: MccCategory.petrolPump,   // Automated Fuel Dispensers
-  5172: MccCategory.lpgCng,       // Petroleum products (LPG / CNG refills)
-
+  5541: MccCategory.petrolPump, // Service Stations (IOCL, BPCL, HPCL)
+  5542: MccCategory.petrolPump, // Automated Fuel Dispensers
+  5172: MccCategory.lpgCng, // Petroleum products (LPG / CNG refills)
   // ── Two-Wheeler Fuel ──────────────────────────────────────────────────────
   // (Often charged at 5541 too; separate if your POS differentiates)
   5571: MccCategory.twoWheelerFuel, // Motorcycle Shops / fuel tagged to 2W
-
   // ── Cab / Ride-Hail ───────────────────────────────────────────────────────
-  4121: MccCategory.cabRideHail,   // Taxicabs / Limousines (Ola, Uber)
-  4722: MccCategory.cabRideHail,   // Travel Agencies (sometimes Ola biz)
-
+  4121: MccCategory.cabRideHail, // Taxicabs / Limousines (Ola, Uber)
+  4722: MccCategory.cabRideHail, // Travel Agencies (sometimes Ola biz)
   // ── Auto Rickshaw ─────────────────────────────────────────────────────────
   // Namma Yatri, Ola Auto, Rapido Auto show up under 4121 too;
   // some aggregators use 7299 for misc transport services.
-  7299: MccCategory.autoRickshaw,  // Misc Services — map to auto category
-
+  7299: MccCategory.autoRickshaw, // Misc Services — map to auto category
   // ── Domestic Airlines ─────────────────────────────────────────────────────
   4511: MccCategory.domesticFlight, // Airlines, Air Carriers
-  3000: MccCategory.domesticFlight, // United (ignore; catches IndiGo via 3000–3299 range)
+  3000: MccCategory
+      .domesticFlight, // United (ignore; catches IndiGo via 3000–3299 range)
   3066: MccCategory.domesticFlight, // IndiGo
   3096: MccCategory.domesticFlight, // Air India
-
   // ── Indian Railways ───────────────────────────────────────────────────────
   4112: MccCategory.indianRailways, // Passenger Railways (IRCTC)
-  4111: MccCategory.metro,          // Local & Suburban Commuter (Metro tagged here)
-  4131: MccCategory.cityBus,        // Bus Lines (BEST, DTC, KSRTC, BMTC)
-
+  4111: MccCategory.metro, // Local & Suburban Commuter (Metro tagged here)
+  4131: MccCategory.cityBus, // Bus Lines (BEST, DTC, KSRTC, BMTC)
   // ── Food & Restaurants ────────────────────────────────────────────────────
-  5812: MccCategory.restaurant,    // Eating Places, Restaurants, Dhabas
-  5811: MccCategory.restaurant,    // Caterers
-  5814: MccCategory.foodDelivery,  // Fast Food (often used by Swiggy / Zomato POS)
-  5499: MccCategory.foodDelivery,  // Miscellaneous Food Stores (Swiggy, Zomato)
-
+  5812: MccCategory.restaurant, // Eating Places, Restaurants, Dhabas
+  5811: MccCategory.restaurant, // Caterers
+  5814:
+      MccCategory.foodDelivery, // Fast Food (often used by Swiggy / Zomato POS)
+  5499: MccCategory.foodDelivery, // Miscellaneous Food Stores (Swiggy, Zomato)
   // ── Grocery ───────────────────────────────────────────────────────────────
-  5411: MccCategory.grocery,       // Grocery Stores (D-Mart, More, Reliance Fresh)
-  5422: MccCategory.grocery,       // Meat Provisioners
-  5441: MccCategory.grocery,       // Confectionery / mithai shops
-  5912: MccCategory.grocery,       // Drug Stores (sometimes BigBasket pharma)
-
+  5411: MccCategory.grocery, // Grocery Stores (D-Mart, More, Reliance Fresh)
+  5422: MccCategory.grocery, // Meat Provisioners
+  5441: MccCategory.grocery, // Confectionery / mithai shops
+  5912: MccCategory.grocery, // Drug Stores (sometimes BigBasket pharma)
   // ── E-commerce ────────────────────────────────────────────────────────────
-  5999: MccCategory.ecommerce,     // Misc Retail (Flipkart, Meesho, Amazon)
-  5734: MccCategory.ecommerce,     // Computer / Electronics Stores (Croma, Vi)
-  5045: MccCategory.ecommerce,     // Computers & Peripherals
-
+  5999: MccCategory.ecommerce, // Misc Retail (Flipkart, Meesho, Amazon)
+  5734: MccCategory.ecommerce, // Computer / Electronics Stores (Croma, Vi)
+  5045: MccCategory.ecommerce, // Computers & Peripherals
   // ── Utilities ─────────────────────────────────────────────────────────────
-  4900: MccCategory.utilities,     // Utilities — Electricity, Gas, Water
-  4911: MccCategory.utilities,     // Electric Companies (MSEDCL, BESCOM, TATA Power)
-  4924: MccCategory.utilities,     // Natural Gas
+  4900: MccCategory.utilities, // Utilities — Electricity, Gas, Water
+  4911:
+      MccCategory.utilities, // Electric Companies (MSEDCL, BESCOM, TATA Power)
+  4924: MccCategory.utilities, // Natural Gas
 };
 
 /// kg CO₂e per ₹ spent, India-calibrated.
@@ -147,7 +144,8 @@ const Map<MccCategory, SpendCarbonFactor> _categoryFactors = {
   ),
   MccCategory.twoWheelerFuel: SpendCarbonFactor(
     label: 'Two-Wheeler Fuel',
-    kgCo2ePerInr: 0.0200, // 2W ~100cc, 60 km/L, lower per km but accounted per ₹
+    kgCo2ePerInr:
+        0.0200, // 2W ~100cc, 60 km/L, lower per km but accounted per ₹
     category: MccCategory.twoWheelerFuel,
   ),
   MccCategory.cabRideHail: SpendCarbonFactor(
@@ -177,7 +175,8 @@ const Map<MccCategory, SpendCarbonFactor> _categoryFactors = {
   ),
   MccCategory.cityBus: SpendCarbonFactor(
     label: 'City Bus (BEST / DTC / KSRTC)',
-    kgCo2ePerInr: 0.0350, // older diesel fleet, very cheap tickets → higher per ₹
+    kgCo2ePerInr:
+        0.0350, // older diesel fleet, very cheap tickets → higher per ₹
     category: MccCategory.cityBus,
   ),
   MccCategory.restaurant: SpendCarbonFactor(
@@ -192,7 +191,8 @@ const Map<MccCategory, SpendCarbonFactor> _categoryFactors = {
   ),
   MccCategory.grocery: SpendCarbonFactor(
     label: 'Grocery / Kirana',
-    kgCo2ePerInr: 0.0030, // local supply chains, lower cold chain loss than West
+    kgCo2ePerInr:
+        0.0030, // local supply chains, lower cold chain loss than West
     category: MccCategory.grocery,
   ),
   MccCategory.ecommerce: SpendCarbonFactor(
@@ -241,14 +241,21 @@ class TransactionCarbonLog {
 ///   2. Your app's background push handler calls [ingestWebhookPayload].
 ///   3. [onCarbonLogged] fires; persist the result in local SQLite / Drift.
 class TransactionSensorService {
-  TransactionSensorService({required this.onCarbonLogged});
+  TransactionSensorService({
+    required this.onCarbonLogged,
+    this.isDemoMode = false,
+  });
 
   /// Called synchronously for every transaction with a non-zero CO₂ factor.
   final void Function(TransactionCarbonLog log) onCarbonLogged;
+  final bool isDemoMode;
+  Timer? _simulationTimer;
+  final Random _rng = Random();
 
   /// Process a single UPI / card transaction.
   TransactionCarbonLog ingestWebhookPayload(PlaidTransaction tx) {
-    final category = _mccToCategory[tx.merchantCategoryCode] ?? MccCategory.other;
+    final category =
+        _mccToCategory[tx.merchantCategoryCode] ?? MccCategory.other;
     final factor = _categoryFactors[category]!;
     final kgCo2e = factor.kgCo2ePerInr * tx.amountInr;
 
@@ -271,5 +278,41 @@ class TransactionSensorService {
   SpendCarbonFactor factorForMcc(int mcc) {
     final category = _mccToCategory[mcc] ?? MccCategory.other;
     return _categoryFactors[category]!;
+  }
+
+  void startSimulation({int intervalSeconds = 10}) {
+    if (!isDemoMode) return;
+    _simulationTimer?.cancel();
+    _simulationTimer = Timer.periodic(Duration(seconds: intervalSeconds), (_) {
+      final tx = _buildDemoTransaction();
+      ingestWebhookPayload(tx);
+    });
+  }
+
+  void stopSimulation() {
+    _simulationTimer?.cancel();
+    _simulationTimer = null;
+  }
+
+  PlaidTransaction _buildDemoTransaction() {
+    const templates = <(int, String, double, double)>[
+      (5499, 'Zomato', 220, 640),
+      (5541, 'Shell Petrol Pump', 900, 2400),
+      (4121, 'Ola Cab', 120, 480),
+      (5411, 'BigBasket', 350, 1600),
+      (4112, 'IRCTC', 220, 1200),
+      (4900, 'Tata Power', 600, 2200),
+      (5999, 'Flipkart', 500, 3000),
+      (5812, 'Cafe Coffee Day', 150, 700),
+    ];
+    final t = templates[_rng.nextInt(templates.length)];
+    final amount = t.$3 + _rng.nextDouble() * (t.$4 - t.$3);
+    return PlaidTransaction(
+      transactionId: 'demo_${DateTime.now().microsecondsSinceEpoch}',
+      merchantCategoryCode: t.$1,
+      merchantName: t.$2,
+      amountInr: double.parse(amount.toStringAsFixed(2)),
+      authorizedAt: DateTime.now(),
+    );
   }
 }

@@ -10,13 +10,19 @@ class UserResponse(BaseModel):
     streak_days: int
     rank: int
     city: str
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class UserUpdate(BaseModel):
     name: str | None = None
     city: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
 
 
 class UserCreate(BaseModel):
     name: str
     city: str = ""
+    latitude: float | None = None
+    longitude: float | None = None

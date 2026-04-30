@@ -139,15 +139,15 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               // ── CTA / LOADING / RESULTS ──
               if (cc == null && !c.isLoadingCarbonCredit)
                 GlassCard(
-                  borderColor: const Color(0xFF6366F1).withValues(alpha: 0.4),
+                  borderColor: AppTheme.accentIndigo.withValues(alpha: 0.4),
                   child: Column(children: [
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF6366F1).withValues(alpha: 0.1),
+                        color: AppTheme.accentIndigo.withValues(alpha: 0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.monetization_on, color: Color(0xFF6366F1), size: 36),
+                      child: const Icon(Icons.monetization_on, color: AppTheme.accentIndigo, size: 36),
                     ),
                     const SizedBox(height: 14),
                     const Text('Carbon Credit Analysis', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
@@ -164,8 +164,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                         icon: const Icon(Icons.analytics, size: 18),
                         label: const Text('Analyze My Carbon Credit Position'),
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF6366F1),
-                          foregroundColor: Colors.white,
+                          backgroundColor: AppTheme.accentIndigo,
+                          foregroundColor: AppTheme.bg1,
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                         ),
@@ -177,10 +177,10 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
 
               if (c.isLoadingCarbonCredit)
                 GlassCard(
-                  borderColor: const Color(0xFF6366F1).withValues(alpha: 0.4),
+                  borderColor: AppTheme.accentIndigo.withValues(alpha: 0.4),
                   child: Column(children: [
                     const SizedBox(height: 16),
-                    const CircularProgressIndicator(color: Color(0xFF6366F1)),
+                    const CircularProgressIndicator(color: AppTheme.accentIndigo),
                     const SizedBox(height: 16),
                     const Text('Analyzing your carbon credit position...',
                         style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
@@ -211,8 +211,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                     icon: const Icon(Icons.refresh, size: 16),
                     label: const Text('Re-analyze Carbon Credits'),
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF6366F1),
-                      side: const BorderSide(color: Color(0xFF6366F1)),
+                      foregroundColor: AppTheme.accentIndigo,
+                      side: const BorderSide(color: AppTheme.accentIndigo),
                       padding: const EdgeInsets.symmetric(vertical: 12),
                     ),
                     onPressed: c.isLoadingCarbonCredit ? null : c.generateCarbonCreditAnalysis,
@@ -346,15 +346,15 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
 
           Widget warningChip;
           if (potentialCredits < 50) {
-            warningChip = _alertChip("⚠️ Too small for any carbon market. Focus on cost savings instead.", Colors.red);
+            warningChip = _alertChip("⚠️ Too small for any carbon market. Focus on cost savings instead.", AppTheme.accentRed);
           } else if (potentialCredits < 500) {
             warningChip = Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              _alertChip("Small project — only viable via aggregator. Solo registration not possible at this scale.", Colors.orange),
+              _alertChip("Small project — only viable via aggregator. Solo registration not possible at this scale.", AppTheme.warning),
               const SizedBox(height: 4),
               const Text("Connect with Varaha (varaha.earth) or Boomitra (boomitra.com) for aggregated farmer/land projects.", style: TextStyle(color: AppTheme.textSecondary, fontSize: 10))
             ]);
           } else {
-            warningChip = _alertChip("Potentially viable for independent registration. Get a professional assessment.", Colors.green);
+            warningChip = _alertChip("Potentially viable for independent registration. Get a professional assessment.", AppTheme.emerald);
           }
 
           return Container(
@@ -394,7 +394,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               ]),
               const SizedBox(height: 8),
               const Text("(Estimated. Does not account for ~₹40L–₹4Cr project development and verification costs for independent registration.)",
-                  style: TextStyle(color: Colors.grey, fontSize: 10, fontStyle: FontStyle.italic)),
+                  style: TextStyle(color: AppTheme.textSecondary, fontSize: 10, fontStyle: FontStyle.italic)),
               if (isBiochar) ...[
                 const SizedBox(height: 8),
                 const Text("Biochar credits (\$100–200/tonne) require a pyrolysis unit (capital cost: ₹15L–₹1Cr), specific temperature-controlled burning, and registration via Puro.earth registry. This is a medium-term opportunity, not immediately actionable.",
@@ -415,15 +415,15 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     double progress = _actionItems.isEmpty ? 0 : completedCount / _actionItems.length;
 
     Color progressColor;
-    if (progress == 1.0) progressColor = Colors.green;
-    else if (progress >= 0.33) progressColor = Colors.orange;
-    else progressColor = Colors.red;
+    if (progress == 1.0) progressColor = AppTheme.emerald;
+    else if (progress >= 0.33) progressColor = AppTheme.warning;
+    else progressColor = AppTheme.accentRed;
 
     return GlassCard(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           const Row(children: [
-            Icon(Icons.flag, color: Color(0xFF6366F1), size: 20),
+            Icon(Icons.flag, color: AppTheme.accentIndigo, size: 20),
             SizedBox(width: 6),
             Text('Carbon Credit Action Plan', style: TextStyle(color: AppTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
           ]),
@@ -466,7 +466,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item.stepNumber, style: const TextStyle(color: Color(0xFF6366F1), fontSize: 11, fontWeight: FontWeight.w700)),
+                  Text(item.stepNumber, style: const TextStyle(color: AppTheme.accentIndigo, fontSize: 11, fontWeight: FontWeight.w700)),
                   const SizedBox(height: 2),
                   Text(item.actionText,
                       style: TextStyle(
@@ -478,7 +478,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
                   if (item.isCompleted && item.completedAt != null)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
-                      child: Text('Completed ${item.completedAt!.day}/${item.completedAt!.month}/${item.completedAt!.year}', style: const TextStyle(color: Colors.green, fontSize: 10)),
+                      child: Text('Completed ${item.completedAt!.day}/${item.completedAt!.month}/${item.completedAt!.year}', style: const TextStyle(color: AppTheme.emerald, fontSize: 10)),
                     )
                 ],
               ),
@@ -494,7 +494,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     if (schemes == null || schemes is! List || schemes.isEmpty) return const SizedBox.shrink();
 
     return GlassCard(
-      borderColor: const Color(0xFFFF9933).withValues(alpha: 0.3),
+      borderColor: AppTheme.accentGold.withValues(alpha: 0.3),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const Row(children: [
           Text('\u{1f1ee}\u{1f1f3}', style: TextStyle(fontSize: 20)),
@@ -515,7 +515,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              const Icon(Icons.flag, color: Color(0xFFFF9933), size: 18),
+              const Icon(Icons.flag, color: AppTheme.accentAmber, size: 18),
               const SizedBox(width: 10),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text(scheme['scheme']?.toString() ?? '',
@@ -548,10 +548,10 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: const Color(0xFF6366F1).withValues(alpha: 0.15),
+                color: AppTheme.accentIndigo.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(Icons.trending_up, color: Color(0xFF6366F1), size: 20),
+              child: const Icon(Icons.trending_up, color: AppTheme.accentIndigo, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -595,8 +595,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
   Color _verdictColor(String v) {
     switch (v.toUpperCase()) {
       case 'SELLER': return AppTheme.lime;
-      case 'BUYER': return const Color(0xFFEF4444);
-      case 'BOTH': return const Color(0xFF6366F1);
+      case 'BUYER': return AppTheme.accentRed;
+      case 'BOTH': return AppTheme.accentIndigo;
       default: return AppTheme.textSecondary;
     }
   }
@@ -640,8 +640,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     Color color;
     switch (diff.toLowerCase()) {
       case 'easy': emoji = '🟢'; color = AppTheme.lime; break;
-      case 'medium': emoji = '🟡'; color = Colors.amber; break;
-      case 'hard': emoji = '🔴'; color = const Color(0xFFEF4444); break;
+      case 'medium': emoji = '🟡'; color = AppTheme.accentAmber; break;
+      case 'hard': emoji = '🔴'; color = AppTheme.accentRed; break;
       default: emoji = '⚪'; color = AppTheme.textSecondary;
     }
     return Container(
@@ -672,9 +672,9 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
     final isStandard = conf['is_standard_sector'] == true;
     Color color;
     String title;
-    if (score >= 8) { color = Colors.green; title = "High Confidence Analysis"; }
-    else if (score >= 5) { color = Colors.orange; title = "Moderate Confidence — Verify with expert"; }
-    else { color = Colors.red; title = "Low Confidence — AI has limited data on this business type. Do not rely on these figures."; }
+    if (score >= 8) { color = AppTheme.emerald; title = "High Confidence Analysis"; }
+    else if (score >= 5) { color = AppTheme.warning; title = "Moderate Confidence — Verify with expert"; }
+    else { color = AppTheme.accentRed; title = "Low Confidence — AI has limited data on this business type. Do not rely on these figures."; }
     
     return Column(
       children: [
@@ -701,8 +701,8 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
             width: double.infinity,
             margin: const EdgeInsets.only(bottom: 12),
             padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(color: Colors.red.withOpacity(0.15), borderRadius: BorderRadius.circular(8)),
-            child: const Text("Your business type is outside common carbon market categories. The estimates below are experimental. Consult a carbon specialist before making any decisions.", style: TextStyle(color: Colors.red, fontSize: 11, fontWeight: FontWeight.bold)),
+            decoration: BoxDecoration(color: AppTheme.accentRed.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+            child: const Text("Your business type is outside common carbon market categories. The estimates below are experimental. Consult a carbon specialist before making any decisions.", style: TextStyle(color: AppTheme.accentRed, fontSize: 11, fontWeight: FontWeight.bold)),
           ),
       ],
     );
@@ -800,7 +800,7 @@ class _ExchangeScreenState extends State<ExchangeScreen> {
         child: Text.rich(
           TextSpan(children: [
             TextSpan(text: text + " ", style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13)),
-            TextSpan(text: url, style: const TextStyle(color: Colors.blueAccent, fontSize: 13, decoration: TextDecoration.underline)),
+            TextSpan(text: url, style: const TextStyle(color: AppTheme.accentIndigo, fontSize: 13, decoration: TextDecoration.underline)),
           ]),
         ),
       ),

@@ -2,12 +2,15 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../config/app_env.dart';
 import '../models/user_model.dart';
 import '../models/activity_model.dart';
 import '../models/business_model.dart';
+import '../models/map_zone_model.dart';
+import '../models/map_density_point_model.dart';
 
 class ApiService {
-  static const String baseUrl = 'http://127.0.0.1:8000/api/v1';
+  static String get baseUrl => '${AppEnv.backendBaseUrl}/api/v1';
   static const String _userIdKey = 'user_id';
 
   static String? _userId;
@@ -32,9 +35,9 @@ class ApiService {
   }
 
   static Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        if (_userId != null) 'X-Dev-User-Id': _userId!,
-      };
+    'Content-Type': 'application/json',
+    ...?_userId == null ? null : {'X-Dev-User-Id': _userId!},
+  };
 
   // ---------------------------------------------------------------------------
   // USERS
@@ -42,7 +45,9 @@ class ApiService {
   static const _timeout = Duration(seconds: 10);
 
   static Future<UserModel> getMe() async {
-    final res = await http.get(Uri.parse('$baseUrl/users/me'), headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(Uri.parse('$baseUrl/users/me'), headers: _headers)
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       return UserModel.fromJson(jsonDecode(res.body));
     }
@@ -50,7 +55,9 @@ class ApiService {
   }
 
   static Future<List<UserModel>> getLeaderboard({int limit = 20}) async {
-    final res = await http.get(Uri.parse('$baseUrl/leaderboard?limit=$limit'), headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(Uri.parse('$baseUrl/leaderboard?limit=$limit'), headers: _headers)
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       final List data = jsonDecode(res.body);
       return data.map((json) => UserModel.fromJson(json)).toList();
@@ -61,11 +68,16 @@ class ApiService {
   // ---------------------------------------------------------------------------
   // ACTIVITIES
   // ---------------------------------------------------------------------------
-  static Future<List<ActivityModel>> getActivities({int limit = 20, int offset = 0}) async {
-    final res = await http.get(
-      Uri.parse('$baseUrl/activities?limit=$limit&offset=$offset'),
-      headers: _headers,
-    ).timeout(_timeout);
+  static Future<List<ActivityModel>> getActivities({
+    int limit = 20,
+    int offset = 0,
+  }) async {
+    final res = await http
+        .get(
+          Uri.parse('$baseUrl/activities?limit=$limit&offset=$offset'),
+          headers: _headers,
+        )
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       final List data = jsonDecode(res.body);
       return data.map((json) => ActivityModel.fromJson(json)).toList();
@@ -73,17 +85,24 @@ class ApiService {
     throw Exception('Failed to load activities: ${res.body}');
   }
 
-  static Future<ActivityModel> logActivity(String title, String category, double co2Kg, bool isSaving) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/activities'),
-      headers: _headers,
-      body: jsonEncode({
-        'title': title,
-        'category': category,
-        'co2_kg': co2Kg,
-        'is_saving': isSaving,
-      }),
-    ).timeout(_timeout);
+  static Future<ActivityModel> logActivity(
+    String title,
+    String category,
+    double co2Kg,
+    bool isSaving,
+  ) async {
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/activities'),
+          headers: _headers,
+          body: jsonEncode({
+            'title': title,
+            'category': category,
+            'co2_kg': co2Kg,
+            'is_saving': isSaving,
+          }),
+        )
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       return ActivityModel.fromJson(jsonDecode(res.body));
     }
@@ -91,7 +110,9 @@ class ApiService {
   }
 
   static Future<List<double>> getWeekly() async {
-    final res = await http.get(Uri.parse('$baseUrl/activities/weekly'), headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(Uri.parse('$baseUrl/activities/weekly'), headers: _headers)
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
       return List<double>.from(data['days'].map((x) => (x as num).toDouble()));
@@ -100,7 +121,9 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getWrapped() async {
-    final res = await http.get(Uri.parse('$baseUrl/activities/wrapped'), headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(Uri.parse('$baseUrl/activities/wrapped'), headers: _headers)
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     }
@@ -111,7 +134,9 @@ class ApiService {
   // HOUSE GAME
   // ---------------------------------------------------------------------------
   static Future<Map<String, dynamic>> getHouse() async {
-    final res = await http.get(Uri.parse('$baseUrl/house'), headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(Uri.parse('$baseUrl/house'), headers: _headers)
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     }
@@ -119,11 +144,13 @@ class ApiService {
   }
 
   static Future<void> buyHouseItem(String itemKey) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/house/buy'),
-      headers: _headers,
-      body: jsonEncode({'item_key': itemKey}),
-    ).timeout(_timeout);
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/house/buy'),
+          headers: _headers,
+          body: jsonEncode({'item_key': itemKey}),
+        )
+        .timeout(_timeout);
     if (res.statusCode != 200) {
       throw Exception('Failed to buy item: ${res.body}');
     }
@@ -133,7 +160,9 @@ class ApiService {
   // BUSINESS
   // ---------------------------------------------------------------------------
   static Future<BusinessModel> getMyBusiness() async {
-    final res = await http.get(Uri.parse('$baseUrl/business/my'), headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(Uri.parse('$baseUrl/business/my'), headers: _headers)
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       return BusinessModel.fromJson(jsonDecode(res.body));
     }
@@ -141,7 +170,9 @@ class ApiService {
   }
 
   static Future<Map<String, dynamic>> getBenchmark() async {
-    final res = await http.get(Uri.parse('$baseUrl/business/benchmark'), headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(Uri.parse('$baseUrl/business/benchmark'), headers: _headers)
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       return jsonDecode(res.body);
     }
@@ -153,7 +184,9 @@ class ApiService {
   // ---------------------------------------------------------------------------
   static Future<List<SubsidyModel>> getSubsidies({String? sector}) async {
     final query = sector != null ? '?sector=$sector' : '';
-    final res = await http.get(Uri.parse('$baseUrl/subsidies$query'), headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(Uri.parse('$baseUrl/subsidies$query'), headers: _headers)
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       final List data = jsonDecode(res.body);
       return data.map((json) => SubsidyModel.fromJson(json)).toList();
@@ -162,7 +195,9 @@ class ApiService {
   }
 
   static Future<List<ExchangeItem>> getExchangeListings() async {
-    final res = await http.get(Uri.parse('$baseUrl/exchange'), headers: _headers).timeout(_timeout);
+    final res = await http
+        .get(Uri.parse('$baseUrl/exchange'), headers: _headers)
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       final List data = jsonDecode(res.body);
       return data.map((json) => ExchangeItem.fromJson(json)).toList();
@@ -170,12 +205,39 @@ class ApiService {
     throw Exception('Failed to load exchange listings: ${res.body}');
   }
 
+  // ---------------------------------------------------------------------------
+  // MAP
+  // ---------------------------------------------------------------------------
+  static Future<List<MapZoneModel>> getMapZones() async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/map/zones'), headers: _headers)
+        .timeout(_timeout);
+    if (res.statusCode == 200) {
+      final List data = jsonDecode(res.body);
+      return data.map((json) => MapZoneModel.fromJson(json)).toList();
+    }
+    throw Exception('Failed to load map zones: ${res.body}');
+  }
+
+  static Future<List<MapDensityPointModel>> getUserDensityPoints() async {
+    final res = await http
+        .get(Uri.parse('$baseUrl/map/user-density'), headers: _headers)
+        .timeout(_timeout);
+    if (res.statusCode == 200) {
+      final List data = jsonDecode(res.body);
+      return data.map((json) => MapDensityPointModel.fromJson(json)).toList();
+    }
+    throw Exception('Failed to load user density points: ${res.body}');
+  }
+
   static Future<UserModel> register(String name, String city) async {
-    final res = await http.post(
-      Uri.parse('$baseUrl/users'),
-      headers: {'Content-Type': 'application/json'},
-      body: jsonEncode({'name': name, 'city': city}),
-    ).timeout(_timeout);
+    final res = await http
+        .post(
+          Uri.parse('$baseUrl/users'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({'name': name, 'city': city}),
+        )
+        .timeout(_timeout);
     if (res.statusCode == 201) {
       return UserModel.fromJson(jsonDecode(res.body));
     }
@@ -183,8 +245,12 @@ class ApiService {
   }
 
   static Future<List<UserModel>> searchUsers(String name) async {
-    final uri = Uri.parse('$baseUrl/users/search').replace(queryParameters: {'name': name});
-    final res = await http.get(uri, headers: {'Content-Type': 'application/json'}).timeout(_timeout);
+    final uri = Uri.parse(
+      '$baseUrl/users/search',
+    ).replace(queryParameters: {'name': name});
+    final res = await http
+        .get(uri, headers: {'Content-Type': 'application/json'})
+        .timeout(_timeout);
     if (res.statusCode == 200) {
       final List data = jsonDecode(res.body);
       return data.map((json) => UserModel.fromJson(json)).toList();

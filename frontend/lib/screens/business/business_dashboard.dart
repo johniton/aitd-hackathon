@@ -585,7 +585,7 @@ class _BusinessDashboardState extends State<BusinessDashboard> {
                   icon: const Icon(Icons.rocket_launch, size: 20),
                   label: const Text('Generate Sustainability Analysis', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.emerald, foregroundColor: Colors.white,
+                    backgroundColor: AppTheme.emerald, foregroundColor: AppTheme.bg1,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
                   onPressed: _otherBusiness.trim().isEmpty ? null : () {

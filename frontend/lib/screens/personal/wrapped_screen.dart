@@ -1,4 +1,9 @@
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
 
@@ -11,8 +16,10 @@ class WrappedScreen extends StatefulWidget {
 
 class _WrappedScreenState extends State<WrappedScreen> {
   final _controller = PageController();
+  final _repaintKey = GlobalKey();
   int _page = 0;
   bool _isLoading = true;
+  bool _isSharing = false;
   String _error = '';
   List<_WrappedPage> _pages = [];
 
@@ -74,6 +81,34 @@ class _WrappedScreenState extends State<WrappedScreen> {
     }
   }
 
+  Future<void> _shareCurrentPage() async {
+    setState(() => _isSharing = true);
+    try {
+      await Future.delayed(const Duration(milliseconds: 100));
+      final boundary = _repaintKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final bytes = byteData.buffer.asUint8List();
+      final dir = await getTemporaryDirectory();
+      final file = File('${dir.path}/wrapped_${_page + 1}.png');
+      await file.writeAsBytes(bytes);
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text: 'My eco impact this year 🌍 #GreenCoins #EcoTracker',
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Share failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSharing = false);
+    }
+  }
+
   @override
   void dispose() {
     _controller.dispose();
@@ -96,7 +131,7 @@ class _WrappedScreenState extends State<WrappedScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              Text('Error: $_error', style: const TextStyle(color: AppTheme.accentRed)),
               TextButton(onPressed: _loadData, child: const Text('Retry')),
             ],
           ),
@@ -107,11 +142,14 @@ class _WrappedScreenState extends State<WrappedScreen> {
     return Scaffold(
       body: Stack(
         children: [
-          PageView.builder(
-            controller: _controller,
-            onPageChanged: (i) => setState(() => _page = i),
-            itemCount: _pages.length,
-            itemBuilder: (_, i) => _WrappedPageWidget(data: _pages[i]),
+          RepaintBoundary(
+            key: _repaintKey,
+            child: PageView.builder(
+              controller: _controller,
+              onPageChanged: (i) => setState(() => _page = i),
+              itemCount: _pages.length,
+              itemBuilder: (_, i) => _WrappedPageWidget(data: _pages[i]),
+            ),
           ),
           SafeArea(
             child: Padding(
@@ -138,11 +176,13 @@ class _WrappedScreenState extends State<WrappedScreen> {
                   const Spacer(),
                   if (_page == _pages.length - 1)
                     GestureDetector(
-                      onTap: () => Navigator.pop(context),
+                      onTap: _isSharing ? null : _shareCurrentPage,
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
-                        child: const Text('Share 📤', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+                        child: _isSharing
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                            : const Text('Share 📤', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                       ),
                     )
                   else

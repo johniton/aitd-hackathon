@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 enum EmissionScope { scope1, scope2, scope3 }
 
 class ScopeBadge extends StatelessWidget {
   final EmissionScope scope;
-  
+
   const ScopeBadge({super.key, required this.scope});
 
   @override
@@ -15,18 +16,18 @@ class ScopeBadge extends StatelessWidget {
 
     switch (scope) {
       case EmissionScope.scope1:
-        bgColor = Colors.grey.shade800;
-        textColor = Colors.white;
+        bgColor = AppTheme.surface;
+        textColor = AppTheme.textSecondary;
         text = "S1 Direct";
         break;
       case EmissionScope.scope2:
-        bgColor = Colors.blue.shade900.withValues(alpha: 0.6);
-        textColor = Colors.blue.shade100;
+        bgColor = AppTheme.accentIndigo.withValues(alpha: 0.12);
+        textColor = AppTheme.accentIndigo;
         text = "S2 Energy";
         break;
       case EmissionScope.scope3:
-        bgColor = Colors.orange.shade900.withValues(alpha: 0.6);
-        textColor = Colors.orange.shade100;
+        bgColor = AppTheme.warning.withValues(alpha: 0.12);
+        textColor = AppTheme.warning;
         text = "S3 Value Chain ⚠️";
         break;
     }
@@ -50,7 +51,7 @@ class ScopeBadge extends StatelessWidget {
         message: "Scope 3 emissions are from activities outside your direct control. You generally CANNOT generate carbon credits from Scope 3 reductions. These are included for your awareness only.",
         margin: const EdgeInsets.symmetric(horizontal: 20),
         padding: const EdgeInsets.all(12),
-        textStyle: const TextStyle(color: Colors.white, fontSize: 12),
+        textStyle: const TextStyle(color: AppTheme.textPrimary, fontSize: 12),
         child: badge,
       );
     }

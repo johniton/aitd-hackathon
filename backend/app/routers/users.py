@@ -18,6 +18,8 @@ def register_user(body: UserCreate):
         "name": body.name.strip(),
         "avatar_initials": initials,
         "city": body.city,
+        "latitude": body.latitude,
+        "longitude": body.longitude,
         "green_coins": 0,
         "total_co2_saved": 0,
         "streak_days": 0,
@@ -32,6 +34,8 @@ def register_user(body: UserCreate):
         streak_days=created.get("streak_days", 0),
         rank=0,
         city=created.get("city", ""),
+        latitude=created.get("latitude"),
+        longitude=created.get("longitude"),
     )
 
 
@@ -45,6 +49,7 @@ def search_users(name: str = Query(..., min_length=1)):
             id=u["id"], name=u["name"], avatar_initials=u["avatar_initials"],
             green_coins=u.get("green_coins", 0), total_co2_saved=u.get("total_co2_saved", 0),
             streak_days=u.get("streak_days", 0), rank=rank, city=u.get("city", ""),
+            latitude=u.get("latitude"), longitude=u.get("longitude"),
         ))
     return result
 
@@ -59,6 +64,7 @@ def get_me(user_id: str = Depends(get_current_user)):
         id=user["id"], name=user["name"], avatar_initials=user["avatar_initials"],
         green_coins=user.get("green_coins", 0), total_co2_saved=user.get("total_co2_saved", 0),
         streak_days=user.get("streak_days", 0), rank=rank, city=user.get("city", ""),
+        latitude=user.get("latitude"), longitude=user.get("longitude"),
     )
 
 
@@ -71,6 +77,10 @@ def update_me(body: UserUpdate, user_id: str = Depends(get_current_user)):
         updates["avatar_initials"] = "".join(p[0].upper() for p in parts[:2]) if parts else "?"
     if body.city is not None:
         updates["city"] = body.city
+    if body.latitude is not None:
+        updates["latitude"] = body.latitude
+    if body.longitude is not None:
+        updates["longitude"] = body.longitude
     if not updates:
         raise HTTPException(status_code=400, detail="No fields to update")
 
@@ -82,4 +92,5 @@ def update_me(body: UserUpdate, user_id: str = Depends(get_current_user)):
         id=user["id"], name=user["name"], avatar_initials=user["avatar_initials"],
         green_coins=user.get("green_coins", 0), total_co2_saved=user.get("total_co2_saved", 0),
         streak_days=user.get("streak_days", 0), rank=rank, city=user.get("city", ""),
+        latitude=user.get("latitude"), longitude=user.get("longitude"),
     )

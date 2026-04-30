@@ -11,6 +11,29 @@ import '../../widgets/activity_tile.dart';
 import 'log_activity_screen.dart';
 import 'wrapped_screen.dart';
 
+// ── Daily challenge data ──────────────────────────────────────────────────────
+
+const _challenges = [
+  (icon: '🚶', title: 'Walk it out', desc: 'Walk or cycle instead of a cab for one trip today.', coins: 20),
+  (icon: '🌱', title: 'Plant-based meal', desc: 'Skip meat for one meal and log it.', coins: 15),
+  (icon: '💡', title: 'Lights off', desc: 'Turn off all standby devices for 4 hours.', coins: 10),
+  (icon: '♻️', title: 'Zero waste lunch', desc: 'Bring a lunchbox — no single-use plastic today.', coins: 18),
+  (icon: '🚿', title: 'Short shower', desc: 'Keep your shower under 5 minutes.', coins: 12),
+  (icon: '🛒', title: 'Local first', desc: 'Buy groceries from a local kirana store.', coins: 14),
+  (icon: '📵', title: 'Screen detox', desc: 'Reduce screen time by 1 hour to cut device energy use.', coins: 10),
+];
+
+({String icon, String title, String desc, int coins}) _todaysChallenge() {
+  final dayIndex = DateTime.now().difference(DateTime(2025)).inDays % _challenges.length;
+  return _challenges[dayIndex];
+}
+
+// ── Streak milestones ─────────────────────────────────────────────────────────
+
+const _milestones = [7, 14, 30, 60, 100];
+
+bool _isMilestone(int days) => _milestones.contains(days);
+
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
 
@@ -24,6 +47,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
   late UserModel _user;
   late List<double> _weeklyData;
   late List<ActivityModel> _recentActivities;
+  bool _challengeDone = false;
+  bool _milestoneShown = false;
 
   @override
   void initState() {
@@ -44,12 +69,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
         _recentActivities = futures[2] as List<ActivityModel>;
         _isLoading = false;
       });
+      if (!_milestoneShown && _isMilestone(_user.streakDays)) {
+        _milestoneShown = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) => _showStreakCelebration());
+      }
     } catch (e) {
       setState(() {
         _error = e.toString();
         _isLoading = false;
       });
     }
+  }
+
+  void _showStreakCelebration() {
+    showDialog(
+      context: context,
+      barrierColor: Colors.black54,
+      builder: (_) => _StreakCelebrationDialog(days: _user.streakDays),
+    );
+  }
+
+  Widget _buildDailyChallenge() {
+    final c = _todaysChallenge();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 0),
+      child: GlassCard(
+        borderColor: AppTheme.lime.withValues(alpha: 0.35),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppTheme.lime.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'DAILY CHALLENGE',
+                    style: TextStyle(color: AppTheme.lime, fontSize: 10, fontWeight: FontWeight.w700, letterSpacing: 1.2),
+                  ),
+                ),
+                const Spacer(),
+                Text('+${c.coins} 🪙', style: const TextStyle(color: AppTheme.lime, fontSize: 13, fontWeight: FontWeight.w700)),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(c.icon, style: const TextStyle(fontSize: 32)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(c.title, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 15, fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 4),
+                      Text(c.desc, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 12, height: 1.4)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: _challengeDone
+                  ? Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      decoration: BoxDecoration(
+                        color: AppTheme.emerald.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.3)),
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.check_circle, color: AppTheme.emerald, size: 18),
+                          SizedBox(width: 6),
+                          Text('Challenge completed!', style: TextStyle(color: AppTheme.emerald, fontSize: 13, fontWeight: FontWeight.w600)),
+                        ],
+                      ),
+                    )
+                  : ElevatedButton(
+                      onPressed: () => setState(() => _challengeDone = true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.lime,
+                        foregroundColor: AppTheme.bg1,
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        textStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                      ),
+                      child: const Text('Mark as done'),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -68,7 +187,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text('Error: $_error', style: const TextStyle(color: Colors.red)),
+              Text('Error: $_error', style: const TextStyle(color: AppTheme.accentRed)),
               TextButton(onPressed: _loadData, child: const Text('Retry')),
             ],
           ),
@@ -113,7 +232,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                               gradient: AppTheme.emeraldGradient,
                               borderRadius: BorderRadius.circular(20),
                             ),
-                            child: const Text('Wrapped ✨', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                            child: const Text('Wrapped ✨', style: TextStyle(color: AppTheme.bg1, fontSize: 12, fontWeight: FontWeight.w600)),
                           ),
                         ),
                       ],
@@ -168,6 +287,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         StatTile(label: 'City Rank', value: '#${_user.rank}', icon: Icons.location_city, color: AppTheme.lime),
                       ],
                     ),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(0, 16, 0, 0),
+                    child: _buildDailyChallenge(),
                   ),
                 ),
                 SliverToBoxAdapter(
@@ -259,11 +384,106 @@ class _DashboardScreenState extends State<DashboardScreen> {
         icon: const Icon(Icons.add),
         label: const Text('Log Activity'),
         backgroundColor: AppTheme.emerald,
-        foregroundColor: Colors.white,
+        foregroundColor: AppTheme.bg1,
       ),
     );
   }
 }
+
+// ── Streak celebration dialog ─────────────────────────────────────────────────
+
+class _StreakCelebrationDialog extends StatefulWidget {
+  final int days;
+  const _StreakCelebrationDialog({required this.days});
+
+  @override
+  State<_StreakCelebrationDialog> createState() => _StreakCelebrationDialogState();
+}
+
+class _StreakCelebrationDialogState extends State<_StreakCelebrationDialog>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _scale;
+  late Animation<double> _fade;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _scale = CurvedAnimation(parent: _ctrl, curve: Curves.elasticOut);
+    _fade = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _ctrl.forward();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  String get _emoji {
+    if (widget.days >= 100) return '🏆';
+    if (widget.days >= 60) return '💎';
+    if (widget.days >= 30) return '🔥';
+    if (widget.days >= 14) return '⚡';
+    return '🌱';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      backgroundColor: Colors.transparent,
+      child: FadeTransition(
+        opacity: _fade,
+        child: ScaleTransition(
+          scale: _scale,
+          child: Container(
+            padding: const EdgeInsets.all(32),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF064E3B), Color(0xFF065F46)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.5), width: 1.5),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(_emoji, style: const TextStyle(fontSize: 64)),
+                const SizedBox(height: 16),
+                Text(
+                  '${widget.days}-Day Streak!',
+                  style: const TextStyle(color: AppTheme.emerald, fontSize: 26, fontWeight: FontWeight.w900),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'You\'ve been eco-conscious for\n${widget.days} days in a row. Keep it up!',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5),
+                ),
+                const SizedBox(height: 24),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.emerald,
+                    foregroundColor: AppTheme.bg1,
+                    padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Keep going!', style: TextStyle(fontWeight: FontWeight.w700)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Info row widget ───────────────────────────────────────────────────────────
 
 class _InfoRow extends StatelessWidget {
   final String emoji;

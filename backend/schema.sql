@@ -12,8 +12,13 @@ create table if not exists users (
   total_co2_saved numeric default 0,
   streak_days integer default 0,
   city text,
+  latitude double precision,
+  longitude double precision,
   created_at timestamptz default now()
 );
+
+alter table users add column if not exists latitude double precision;
+alter table users add column if not exists longitude double precision;
 
 -- ── Activities ─────────────────────────────────────────────────────
 

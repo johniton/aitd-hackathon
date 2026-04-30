@@ -214,7 +214,7 @@ class SubsidyScreen extends StatelessWidget {
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.emerald, foregroundColor: Colors.white),
+                        style: ElevatedButton.styleFrom(backgroundColor: AppTheme.emerald, foregroundColor: AppTheme.bg1),
                         onPressed: () async {
                           final uri = Uri.parse(subsidy.officialUrl);
                           if (await canLaunchUrl(uri)) {

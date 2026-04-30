@@ -110,7 +110,7 @@ class BenchmarkScreen extends StatelessWidget {
                   children: [
                     _BenchmarkBar('You', biz.emissionsKg, myPct, AppTheme.emerald),
                     const SizedBox(height: 20),
-                    _BenchmarkBar('Sector avg', biz.peerAvgKg, avgPct, const Color(0xFFEAB308)),
+                    _BenchmarkBar('Sector avg', biz.peerAvgKg, avgPct, AppTheme.accentAmber),
                     const SizedBox(height: 20),
                     _BenchmarkBar('Best in class', biz.peerAvgKg * 0.6, biz.peerAvgKg * 0.6 / (biz.peerAvgKg * 1.5), AppTheme.lime),
                   ],

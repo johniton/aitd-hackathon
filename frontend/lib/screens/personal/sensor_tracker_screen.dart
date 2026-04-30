@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:math' show pi;
+import 'dart:math' show pi, Random;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -16,6 +16,7 @@ class _SensorState {
   TransportMode transportMode = TransportMode.stationary;
   double transportKgToday = 0.0;
   double transportDistanceKm = 0.0;
+  double transportSpeedKmh = 0.0;
   List<double> transportHistory = List.filled(20, 0.0);
 
   // Financial
@@ -59,9 +60,11 @@ class SensorTrackerScreen extends StatefulWidget {
 class _SensorTrackerScreenState extends State<SensorTrackerScreen>
     with TickerProviderStateMixin {
   final _state = _SensorState();
+  bool _demoMode = false;
 
   late MotionActivityService _motionService;
   late DeviceFootprintService _deviceService;
+  late TransactionSensorService _transactionService;
 
   late AnimationController _pulseController;
   late AnimationController _ringController;
@@ -70,30 +73,15 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
   Timer? _gridTicker;
   RealSensorsService? _realSensors;
 
-
-
-  @override
-  void initState() {
-    super.initState();
-
-    _pulseController = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    )..repeat(reverse: true);
-
-    _ringController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    );
-    _ringAnim = CurvedAnimation(parent: _ringController, curve: Curves.easeOutCubic);
-    _ringController.forward();
-
-    // ── Transport service ────────────────────────────────────────────────────
+  void _startPipelines() {
     _motionService = MotionActivityService(
+      isDemoMode: _demoMode,
+      emitIntervalSeconds: _demoMode ? 5 : 15,
       onCarbonEstimate: (est) {
         if (!mounted) return;
         setState(() {
           _state.transportMode = est.mode;
+          _state.transportSpeedKmh = est.speedKmh;
           _state.transportKgToday += est.kgCo2e;
           _state.transportDistanceKm += est.distanceKm;
           _state.transportHistory = [
@@ -104,11 +92,18 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
         _pulseController.reset();
         _pulseController.repeat(reverse: true);
       },
+      onModeChanged: (mode, speedKmh) {
+        if (!mounted) return;
+        setState(() {
+          _state.transportMode = mode;
+          _state.transportSpeedKmh = speedKmh;
+        });
+      },
     );
-    if (!kIsWeb) _motionService.start();
+    _motionService.start();
 
-    // ── Financial service ────────────────────────────────────────────────────
-    TransactionSensorService(
+    _transactionService = TransactionSensorService(
+      isDemoMode: _demoMode,
       onCarbonLogged: (log) {
         if (!mounted) return;
         setState(() {
@@ -124,9 +119,13 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
         });
       },
     );
+    if (_demoMode) {
+      _transactionService.startSimulation(intervalSeconds: 10);
+    }
 
-    // ── Digital service ──────────────────────────────────────────────────────
     _deviceService = DeviceFootprintService(
+      isDemoMode: _demoMode,
+      intervalSeconds: _demoMode ? 8 : 30,
       onFootprintCalculated: (result) {
         if (!mounted) return;
         setState(() {
@@ -140,11 +139,40 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
         });
       },
     );
+    _deviceService.start();
+  }
 
-    if (!kIsWeb) _deviceService.start();
+  void _stopPipelines() {
+    _motionService.stop();
+    _deviceService.stop();
+    _transactionService.stopSimulation();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _pulseController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat(reverse: true);
+
+    _ringController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    );
+    _ringAnim = CurvedAnimation(
+      parent: _ringController,
+      curve: Curves.easeOutCubic,
+    );
+    _ringController.forward();
+
+    _startPipelines();
 
     // ── Grid Intensity ───────────────────────────────────────────────────────
-    final gridService = GridIntensityService(apiKey: AppConfig.electricityMapsApiKey);
+    final gridService = GridIntensityService(
+      apiKey: AppConfig.electricityMapsApiKey,
+    );
     _gridTicker = Timer.periodic(const Duration(minutes: 15), (timer) async {
       final intensity = await gridService.fetchIntensity();
       if (!mounted) return;
@@ -192,10 +220,9 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
     if (!kIsWeb) _realSensors!.start();
   }
 
-
   @override
   void dispose() {
-    _motionService.stop();
+    _stopPipelines();
     _pulseController.dispose();
     _ringController.dispose();
     _gridTicker?.cancel();
@@ -221,10 +248,14 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
               SliverToBoxAdapter(child: _buildTransportCard()),
               SliverToBoxAdapter(child: _buildSectionLabel('02 — FINANCIAL')),
               SliverToBoxAdapter(child: _buildFinancialCard()),
-              SliverToBoxAdapter(child: _buildSectionLabel('03 — DIGITAL DEVICE')),
+              SliverToBoxAdapter(
+                child: _buildSectionLabel('03 — DIGITAL DEVICE'),
+              ),
               SliverToBoxAdapter(child: _buildDigitalCard()),
               SliverToBoxAdapter(child: _buildGridIntensityCard()),
-              SliverToBoxAdapter(child: _buildSectionLabel('04 — RAW HARDWARE SENSORS')),
+              SliverToBoxAdapter(
+                child: _buildSectionLabel('04 — RAW HARDWARE SENSORS'),
+              ),
               SliverToBoxAdapter(child: _buildRawSensorsCard()),
               const SliverToBoxAdapter(child: SizedBox(height: 100)),
             ],
@@ -249,12 +280,14 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                 height: 10,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AppTheme.emerald
-                      .withValues(alpha: 0.4 + 0.6 * _pulseController.value),
+                  color: AppTheme.emerald.withValues(
+                    alpha: 0.4 + 0.6 * _pulseController.value,
+                  ),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.emerald
-                          .withValues(alpha: 0.6 * _pulseController.value),
+                      color: AppTheme.emerald.withValues(
+                        alpha: 0.6 * _pulseController.value,
+                      ),
                       blurRadius: 8,
                       spreadRadius: 2,
                     ),
@@ -279,16 +312,51 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                 color: AppTheme.emerald.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                    color: AppTheme.emerald.withValues(alpha: 0.3)),
+                  color: AppTheme.emerald.withValues(alpha: 0.3),
+                ),
               ),
               child: const Text(
                 'LIVE',
                 style: TextStyle(
-                    color: AppTheme.emerald,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 1.5),
+                  color: AppTheme.emerald,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.5,
+                ),
               ),
+            ),
+            const SizedBox(width: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: (_demoMode ? AppTheme.warning : AppTheme.lime)
+                    .withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: (_demoMode ? AppTheme.warning : AppTheme.lime)
+                      .withValues(alpha: 0.4),
+                ),
+              ),
+              child: Text(
+                _demoMode ? 'DEMO' : 'REAL',
+                style: TextStyle(
+                  color: _demoMode ? AppTheme.warning : AppTheme.lime,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Switch(
+              value: _demoMode,
+              onChanged: (v) {
+                setState(() => _demoMode = v);
+                _stopPipelines();
+                _startPipelines();
+              },
+              activeThumbColor: AppTheme.warning,
+              inactiveThumbColor: AppTheme.lime,
             ),
           ],
         ),
@@ -317,14 +385,13 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                     CustomPaint(
                       size: const Size(130, 130),
                       painter: _RingPainter(
-                        fraction: (_ringAnim.value *
-                                (total / budget).clamp(0, 1))
-                            .toDouble(),
+                        fraction:
+                            (_ringAnim.value * (total / budget).clamp(0, 1))
+                                .toDouble(),
                         color: total > budget * 0.8
                             ? AppTheme.warning
                             : AppTheme.emerald,
-                        trackColor:
-                            AppTheme.emerald.withValues(alpha: 0.1),
+                        trackColor: AppTheme.emerald.withValues(alpha: 0.1),
                       ),
                     ),
                     Column(
@@ -342,7 +409,9 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                           'kg CO₂\ntoday',
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                              color: AppTheme.textSecondary, fontSize: 11),
+                            color: AppTheme.textSecondary,
+                            fontSize: 11,
+                          ),
                         ),
                       ],
                     ),
@@ -355,38 +424,41 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Automated Pipelines',
-                      style: TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 11)),
+                  const Text(
+                    'Automated Pipelines',
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   _PipelineRow(
                     label: 'Transport',
                     value: _state.transportKgToday,
                     color: AppTheme.emerald,
-                    fraction:
-                        (_state.transportKgToday / budget).clamp(0, 1),
+                    fraction: (_state.transportKgToday / budget).clamp(0, 1),
                   ),
                   const SizedBox(height: 8),
                   _PipelineRow(
                     label: 'Financial',
                     value: _state.financialKgToday,
                     color: AppTheme.lime,
-                    fraction:
-                        (_state.financialKgToday / budget).clamp(0, 1),
+                    fraction: (_state.financialKgToday / budget).clamp(0, 1),
                   ),
                   const SizedBox(height: 8),
                   _PipelineRow(
                     label: 'Digital',
                     value: _state.digitalKgToday,
-                    color: const Color(0xFF818CF8),
-                    fraction:
-                        (_state.digitalKgToday / budget).clamp(0, 1),
+                    color: AppTheme.accentIndigo,
+                    fraction: (_state.digitalKgToday / budget).clamp(0, 1),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Daily budget: ${budget.toStringAsFixed(0)} kg',
                     style: const TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 11),
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
@@ -439,15 +511,16 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                   Text(
                     'Only kg CO₂e figures are transmitted  •  ${_state.eventsBlocked} raw events blocked',
                     style: const TextStyle(
-                        color: AppTheme.textSecondary, fontSize: 11),
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                    ),
                   ),
                 ],
               ),
             ),
             Switch(
               value: _state.privacyShieldEnabled,
-              onChanged: (v) =>
-                  setState(() => _state.privacyShieldEnabled = v),
+              onChanged: (v) => setState(() => _state.privacyShieldEnabled = v),
               activeThumbColor: AppTheme.emerald,
               inactiveThumbColor: AppTheme.warning,
             ),
@@ -475,9 +548,11 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
           ),
           const SizedBox(width: 10),
           Expanded(
-              child: Divider(
-                  color: AppTheme.emerald.withValues(alpha: 0.15),
-                  thickness: 1)),
+            child: Divider(
+              color: AppTheme.emerald.withValues(alpha: 0.15),
+              thickness: 1,
+            ),
+          ),
         ],
       ),
     );
@@ -490,27 +565,23 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
       TransportMode.automotive: (
         'Driving',
         Icons.directions_car,
-        AppTheme.warning
+        AppTheme.warning,
       ),
-      TransportMode.cycling: (
-        'Cycling',
-        Icons.directions_bike,
-        AppTheme.lime
-      ),
+      TransportMode.cycling: ('Cycling', Icons.directions_bike, AppTheme.lime),
       TransportMode.walking: (
         'Walking',
         Icons.directions_walk,
-        AppTheme.emerald
+        AppTheme.emerald,
       ),
       TransportMode.stationary: (
         'Stationary',
         Icons.pause_circle_outline,
-        AppTheme.textSecondary
+        AppTheme.textSecondary,
       ),
       TransportMode.unknown: (
         'Unknown',
         Icons.device_unknown_outlined,
-        AppTheme.textSecondary
+        AppTheme.textSecondary,
       ),
     };
     final info = modeData[_state.transportMode]!;
@@ -528,14 +599,21 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(info.$1,
-                        style: TextStyle(
-                            color: info.$3,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700)),
-                    Text('Current detected mode',
-                        style: const TextStyle(
-                            color: AppTheme.textSecondary, fontSize: 11)),
+                    Text(
+                      info.$1,
+                      style: TextStyle(
+                        color: info.$3,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    Text(
+                      'Current detected mode',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 11,
+                      ),
+                    ),
                   ],
                 ),
                 const Spacer(),
@@ -547,7 +625,8 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: info.$3.withValues(
-                          alpha: 0.4 + 0.6 * _pulseController.value),
+                        alpha: 0.4 + 0.6 * _pulseController.value,
+                      ),
                     ),
                   ),
                 ),
@@ -556,19 +635,62 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
             const SizedBox(height: 16),
             Row(
               children: [
-                _MetricBox('Distance', '${_state.transportDistanceKm.toStringAsFixed(1)} km', AppTheme.emerald),
+                _MetricBox(
+                  'Distance',
+                  '${_state.transportDistanceKm.toStringAsFixed(1)} km',
+                  AppTheme.emerald,
+                ),
                 const SizedBox(width: 10),
-                _MetricBox('CO₂ today', '${_state.transportKgToday.toStringAsFixed(3)} kg', AppTheme.lime),
+                _MetricBox(
+                  'CO₂ today',
+                  '${_state.transportKgToday.toStringAsFixed(3)} kg',
+                  AppTheme.lime,
+                ),
                 const SizedBox(width: 10),
-                _MetricBox('Factor', '171 g/km', AppTheme.textSecondary),
+                _MetricBox(
+                  'Speed',
+                  '${_state.transportSpeedKmh.toStringAsFixed(1)} km/h',
+                  AppTheme.textSecondary,
+                ),
               ],
             ),
             const SizedBox(height: 14),
             _buildSparkline(_state.transportHistory, AppTheme.emerald),
             const SizedBox(height: 8),
-            _SourceBadge(label: 'CMMotionActivityManager / Activity Recognition'),
+            _SourceBadge(
+              label: 'CMMotionActivityManager / Activity Recognition',
+            ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ── Demo transactions (Indian market) ────────────────────────────────────
+
+  static const _demoTransactions = [
+    (5499, 'Zomato', 320.0),
+    (5541, 'IOCL Petrol Pump', 1500.0),
+    (4121, 'Ola Cab', 210.0),
+    (5411, 'D-Mart', 850.0),
+    (4112, 'IRCTC', 450.0),
+    (4511, 'IndiGo Airlines', 4200.0),
+    (4111, 'Delhi Metro', 40.0),
+    (5999, 'Flipkart', 1299.0),
+    (5812, 'Chai Point', 180.0),
+    (4900, 'BESCOM Electricity', 1200.0),
+  ];
+
+  void _simulateTransaction() {
+    final rng = Random();
+    final demo = _demoTransactions[rng.nextInt(_demoTransactions.length)];
+    _transactionService.ingestWebhookPayload(
+      PlaidTransaction(
+        transactionId: 'demo_${DateTime.now().millisecondsSinceEpoch}',
+        merchantCategoryCode: demo.$1,
+        merchantName: demo.$2,
+        amountInr: demo.$3,
+        authorizedAt: DateTime.now(),
       ),
     );
   }
@@ -584,16 +706,34 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
           children: [
             Row(
               children: [
-                const Icon(Icons.credit_card_outlined,
-                    color: AppTheme.lime, size: 26),
+                const Icon(
+                  Icons.credit_card_outlined,
+                  color: AppTheme.lime,
+                  size: 26,
+                ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Last Transaction',
-                          style: TextStyle(
-                              color: AppTheme.textSecondary, fontSize: 11)),
+                      const Text(
+                        'Last Transaction',
+                        style: TextStyle(
+                          color: AppTheme.textSecondary,
+                          fontSize: 11,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _state.lastMerchant == '—'
+                            ? 'No transactions yet'
+                            : _state.lastMerchant,
+                        style: const TextStyle(
+                          color: AppTheme.textPrimary,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -606,41 +746,59 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                 color: AppTheme.lime.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(
-                    color: AppTheme.lime.withValues(alpha: 0.15)),
+                  color: AppTheme.lime.withValues(alpha: 0.15),
+                ),
               ),
               child: Row(
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _state.lastMerchant,
-                        style: const TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w700),
+                  Expanded(
+                    child: Text(
+                      _state.lastMcc == 0
+                          ? 'Tap "Simulate" to demo a transaction'
+                          : 'MCC ${_state.lastMcc} — ${_state.lastCategory}',
+                      style: const TextStyle(
+                        color: AppTheme.textSecondary,
+                        fontSize: 11,
                       ),
-                      const SizedBox(height: 4),
-                      Text('MCC ${_state.lastMcc} — ${_state.lastCategory}',
-                          style: const TextStyle(
-                              color: AppTheme.textSecondary, fontSize: 11)),
-                    ],
+                    ),
                   ),
-                  const Spacer(),
+                  const SizedBox(width: 8),
                   Text(
-                    '${_state.financialKgToday.toStringAsFixed(2)} kg',
+                    '${_state.financialKgToday.toStringAsFixed(2)} kg CO₂',
                     style: const TextStyle(
-                        color: AppTheme.lime,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800),
+                      color: AppTheme.lime,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 14),
             _buildSparkline(_state.financialHistory, AppTheme.lime),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: _simulateTransaction,
+                icon: const Icon(Icons.receipt_long_outlined, size: 16),
+                label: const Text('Simulate UPI Transaction'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.lime,
+                  side: BorderSide(color: AppTheme.lime.withValues(alpha: 0.4)),
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 8),
-            _SourceBadge(label: 'Plaid Webhook → MCC → Climatiq spend factor'),
+            _SourceBadge(
+              label:
+                  'UPI Webhook → MCC → India-calibrated CO₂ factors (MoEFCC/CEEW)',
+            ),
           ],
         ),
       ),
@@ -656,43 +814,53 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Row(
+            Row(
               children: [
-                Icon(Icons.phone_android_outlined,
-                    color: Color(0xFF818CF8), size: 26),
-                SizedBox(width: 12),
-                Text('Device Footprint',
-                    style: TextStyle(
-                        color: AppTheme.textPrimary,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700)),
+                const Icon(
+                  Icons.phone_android_outlined,
+                  color: AppTheme.accentIndigo,
+                  size: 26,
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  'Device Footprint',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
             Row(
               children: [
                 _MetricBox(
-                    'Network',
-                    '${_state.networkGb.toStringAsFixed(2)} GB',
-                    const Color(0xFF818CF8)),
+                  'Network',
+                  '${_state.networkGb.toStringAsFixed(2)} GB',
+                  AppTheme.accentIndigo,
+                ),
                 const SizedBox(width: 10),
                 _MetricBox(
-                    'Battery',
-                    '${(_state.batteryDelta * 1000).toStringAsFixed(1)} Wh',
-                    AppTheme.lime),
+                  'Battery',
+                  '${(_state.batteryDelta * 1000).toStringAsFixed(1)} Wh',
+                  AppTheme.lime,
+                ),
                 const SizedBox(width: 10),
-                _MetricBox('CO₂ today',
-                    '${_state.digitalKgToday.toStringAsFixed(4)} kg',
-                    const Color(0xFF818CF8)),
+                _MetricBox(
+                  'CO₂ today',
+                  '${_state.digitalKgToday.toStringAsFixed(4)} kg',
+                  AppTheme.accentIndigo,
+                ),
               ],
             ),
             const SizedBox(height: 14),
-            _buildSparkline(
-                _state.digitalHistory, const Color(0xFF818CF8)),
+            _buildSparkline(_state.digitalHistory, AppTheme.accentIndigo),
             const SizedBox(height: 8),
             _SourceBadge(
-                label:
-                    'BatteryManager + NetworkStatsManager → 0.06 kWh/GB (Wi-Fi)'),
+              label:
+                  'BatteryManager + NetworkStatsManager → 0.06 kWh/GB (Wi-Fi)',
+            ),
           ],
         ),
       ),
@@ -706,8 +874,8 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
     final Color intensityColor = intensity < 300
         ? AppTheme.emerald
         : intensity < 450
-            ? AppTheme.lime
-            : AppTheme.warning;
+        ? AppTheme.lime
+        : AppTheme.warning;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
@@ -722,9 +890,13 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Live Grid Carbon Intensity',
-                      style: TextStyle(
-                          color: AppTheme.textSecondary, fontSize: 11)),
+                  const Text(
+                    'Live Grid Carbon Intensity',
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Row(
                     children: [
@@ -732,16 +904,19 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                         child: Text(
                           '${intensity.toStringAsFixed(0)} gCO₂/kWh',
                           style: TextStyle(
-                              color: intensityColor,
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800),
+                            color: intensityColor,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
                       const SizedBox(width: 8),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 3),
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: intensityColor.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(8),
@@ -750,13 +925,14 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
                           intensity < 300
                               ? 'CLEAN'
                               : intensity < 450
-                                  ? 'MODERATE'
-                                  : 'DIRTY',
+                              ? 'MODERATE'
+                              : 'DIRTY',
                           style: TextStyle(
-                              color: intensityColor,
-                              fontSize: 10,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 1.2),
+                            color: intensityColor,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.2,
+                          ),
                         ),
                       ),
                     ],
@@ -782,49 +958,90 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
           children: [
             const Row(
               children: [
-                Icon(Icons.developer_board_outlined, color: Colors.orangeAccent, size: 26),
+                Icon(
+                  Icons.developer_board_outlined,
+                  color: AppTheme.accentAmber,
+                  size: 26,
+                ),
                 SizedBox(width: 12),
-                Text('Hardware Telemetry',
-                    style: TextStyle(color: AppTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.w700)),
+                Text(
+                  'Hardware Telemetry',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 16),
             Row(
               children: [
-                _MetricBox('Steps', '${_state.steps}', Colors.orangeAccent),
+                _MetricBox('Steps', '${_state.steps}', AppTheme.accentAmber),
                 const SizedBox(width: 10),
-                _MetricBox('Motion', _state.pedStatus, Colors.orangeAccent),
+                _MetricBox('Motion', _state.pedStatus, AppTheme.accentAmber),
                 const SizedBox(width: 10),
-                _MetricBox('Battery', '${_state.batteryLevel}%', Colors.orangeAccent),
+                _MetricBox(
+                  'Battery',
+                  '${_state.batteryLevel}%',
+                  AppTheme.accentAmber,
+                ),
               ],
             ),
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.orangeAccent.withValues(alpha: 0.07),
+                color: AppTheme.accentAmber.withValues(alpha: 0.07),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: Colors.orangeAccent.withValues(alpha: 0.15)),
+                border: Border.all(
+                  color: AppTheme.accentAmber.withValues(alpha: 0.15),
+                ),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Live Accelerometer (m/s²)',
-                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                  const Text(
+                    'Live Accelerometer (m/s²)',
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('X: ${_state.accelX.toStringAsFixed(2)} | Y: ${_state.accelY.toStringAsFixed(2)} | Z: ${_state.accelZ.toStringAsFixed(2)}',
-                      style: const TextStyle(color: Colors.orangeAccent, fontSize: 13, fontFamily: 'monospace')),
+                  Text(
+                    'X: ${_state.accelX.toStringAsFixed(2)} | Y: ${_state.accelY.toStringAsFixed(2)} | Z: ${_state.accelZ.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: AppTheme.accentAmber,
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
                   const SizedBox(height: 12),
-                  const Text('Live Gyroscope (rad/s)',
-                      style: TextStyle(color: AppTheme.textSecondary, fontSize: 11)),
+                  const Text(
+                    'Live Gyroscope (rad/s)',
+                    style: TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 11,
+                    ),
+                  ),
                   const SizedBox(height: 4),
-                  Text('X: ${_state.gyroX.toStringAsFixed(2)} | Y: ${_state.gyroY.toStringAsFixed(2)} | Z: ${_state.gyroZ.toStringAsFixed(2)}',
-                      style: const TextStyle(color: Colors.orangeAccent, fontSize: 13, fontFamily: 'monospace')),
+                  Text(
+                    'X: ${_state.gyroX.toStringAsFixed(2)} | Y: ${_state.gyroY.toStringAsFixed(2)} | Z: ${_state.gyroZ.toStringAsFixed(2)}',
+                    style: const TextStyle(
+                      color: AppTheme.accentAmber,
+                      fontSize: 13,
+                      fontFamily: 'monospace',
+                    ),
+                  ),
                 ],
               ),
             ),
             const SizedBox(height: 8),
-            const _SourceBadge(label: 'Android SensorManager (Accelerometer, Gyroscope, Pedometer, Battery)'),
+            const _SourceBadge(
+              label:
+                  'Android SensorManager (Accelerometer, Gyroscope, Pedometer, Battery)',
+            ),
           ],
         ),
       ),
@@ -859,10 +1076,7 @@ class _SensorTrackerScreenState extends State<SensorTrackerScreen>
               belowBarData: BarAreaData(
                 show: true,
                 gradient: LinearGradient(
-                  colors: [
-                    color.withValues(alpha: 0.25),
-                    Colors.transparent,
-                  ],
+                  colors: [color.withValues(alpha: 0.25), Colors.transparent],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -896,17 +1110,23 @@ class _MetricBox extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(label,
-                style: TextStyle(
-                    color: color.withValues(alpha: 0.7),
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600)),
+            Text(
+              label,
+              style: TextStyle(
+                color: color.withValues(alpha: 0.7),
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
             const SizedBox(height: 4),
-            Text(value,
-                style: TextStyle(
-                    color: color,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800)),
+            Text(
+              value,
+              style: TextStyle(
+                color: color,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
           ],
         ),
       ),
@@ -919,11 +1139,12 @@ class _PipelineRow extends StatelessWidget {
   final double value;
   final Color color;
   final double fraction;
-  const _PipelineRow(
-      {required this.label,
-      required this.value,
-      required this.color,
-      required this.fraction});
+  const _PipelineRow({
+    required this.label,
+    required this.value,
+    required this.color,
+    required this.fraction,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -932,16 +1153,22 @@ class _PipelineRow extends StatelessWidget {
       children: [
         Row(
           children: [
-            Text(label,
-                style: const TextStyle(
-                    color: AppTheme.textSecondary,
-                    fontSize: 11)),
+            Text(
+              label,
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 11,
+              ),
+            ),
             const Spacer(),
-            Text('${value.toStringAsFixed(3)} kg',
-                style: TextStyle(
-                    color: color,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700)),
+            Text(
+              '${value.toStringAsFixed(3)} kg',
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -968,7 +1195,9 @@ class _SourceBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: EdgeInsets.symmetric(
-          horizontal: compact ? 6 : 8, vertical: compact ? 3 : 4),
+        horizontal: compact ? 6 : 8,
+        vertical: compact ? 3 : 4,
+      ),
       decoration: BoxDecoration(
         color: AppTheme.emerald.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(6),
@@ -976,9 +1205,10 @@ class _SourceBadge extends StatelessWidget {
       child: Text(
         label,
         style: const TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 9.5,
-            letterSpacing: 0.3),
+          color: AppTheme.textSecondary,
+          fontSize: 9.5,
+          letterSpacing: 0.3,
+        ),
       ),
     );
   }
@@ -990,10 +1220,11 @@ class _RingPainter extends CustomPainter {
   final double fraction;
   final Color color;
   final Color trackColor;
-  const _RingPainter(
-      {required this.fraction,
-      required this.color,
-      required this.trackColor});
+  const _RingPainter({
+    required this.fraction,
+    required this.color,
+    required this.trackColor,
+  });
 
   @override
   void paint(Canvas canvas, Size size) {

@@ -1,4 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:http/http.dart' as http;
+import '../../config/app_env.dart';
 import '../../data/emission_factors.dart';
 import '../../services/api_service.dart';
 import '../../theme/app_theme.dart';
@@ -31,6 +36,11 @@ class _LogActivityScreenState extends State<LogActivityScreen> with SingleTicker
   static const _wasteCo2 = [0.1, 0.05, 0.7];
 
   int _selectedOption = 0;
+
+  // Receipt photo tab state
+  XFile? _receiptImage;
+  bool _scanningReceipt = false;
+  Map<String, dynamic>? _receiptResult;
 
   List<String> get _options {
     switch (_selectedCategory) {
@@ -243,7 +253,7 @@ class _LogActivityScreenState extends State<LogActivityScreen> with SingleTicker
                 } catch (e) {
                   if (mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(backgroundColor: Colors.red, content: Text('Error: $e')),
+                      SnackBar(backgroundColor: AppTheme.accentRed, content: Text('Error: $e')),
                     );
                   }
                 }
@@ -257,7 +267,234 @@ class _LogActivityScreenState extends State<LogActivityScreen> with SingleTicker
     );
   }
 
+  Future<void> _pickAndScanReceipt(ImageSource source) async {
+    final picker = ImagePicker();
+    final file = await picker.pickImage(source: source, imageQuality: 85, maxWidth: 1200);
+    if (file == null) return;
+
+    setState(() {
+      _receiptImage = file;
+      _scanningReceipt = true;
+      _receiptResult = null;
+    });
+
+    try {
+      final bytes = await File(file.path).readAsBytes();
+      final base64Image = base64Encode(bytes);
+
+      const prompt = '''You are a carbon footprint analyser for an Indian eco app called GoaGreen.
+Analyse this receipt/bill image and return ONLY a valid JSON object with these exact keys:
+{
+  "merchant": "<shop or restaurant name>",
+  "category": "<one of: food, transport, energy, shopping, groceries>",
+  "items": ["<item1>", "<item2>"],
+  "total_inr": <number>,
+  "co2_kg": <estimated kg CO2e as a number>,
+  "is_eco": <true if this purchase is eco-friendly, false otherwise>,
+  "coins": <GreenCoins to award: 20 if eco, 5 if not>,
+  "insight": "<one sentence eco insight about this purchase in Indian context>"
+}
+Base your CO2 estimate on typical Indian emission factors. Be concise and accurate.
+Return ONLY the JSON, no markdown, no explanation.''';
+
+      final response = await http.post(
+        Uri.parse('${AppEnv.sneakyApiUrl}/api/analyze/base64'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'prompt': prompt,
+          'imageBase64': base64Image,
+          'imageName': 'receipt.jpg',
+        }),
+      ).timeout(const Duration(seconds: 120));
+
+      if (response.statusCode == 200) {
+        final body = jsonDecode(response.body);
+        final rawText = (body['response'] as String).trim();
+        // Strip markdown fences if present
+        final jsonText = rawText.replaceAll(RegExp(r'^```json?\s*', multiLine: true), '').replaceAll(RegExp(r'```$', multiLine: true), '').trim();
+        final parsed = jsonDecode(jsonText) as Map<String, dynamic>;
+        setState(() {
+          _receiptResult = parsed;
+          _scanningReceipt = false;
+        });
+      } else {
+        throw Exception('Sneaky API error ${response.statusCode}');
+      }
+    } catch (e) {
+      setState(() => _scanningReceipt = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: AppTheme.accentRed, content: Text('Scan failed: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _logReceiptActivity() async {
+    final r = _receiptResult;
+    if (r == null) return;
+    try {
+      await ApiService.logActivity(
+        r['merchant'] as String? ?? 'Receipt scan',
+        r['category'] as String? ?? 'shopping',
+        (r['co2_kg'] as num?)?.toDouble() ?? 0.0,
+        r['is_eco'] as bool? ?? false,
+      );
+      if (mounted) {
+        final coins = r['coins'] as int? ?? 5;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: AppTheme.emerald,
+            content: Text('Logged! +$coins GreenCoins 🌱'),
+            duration: const Duration(seconds: 2),
+          ),
+        );
+        setState(() {
+          _receiptImage = null;
+          _receiptResult = null;
+        });
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: AppTheme.accentRed, content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
   Widget _buildPhotoTab() {
+    final result = _receiptResult;
+
+    if (_scanningReceipt) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(color: AppTheme.emerald),
+            const SizedBox(height: 20),
+            Text('Analysing receipt with AI...', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+            if (_receiptImage != null) ...[
+              const SizedBox(height: 20),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: Image.file(File(_receiptImage!.path), height: 160, fit: BoxFit.cover),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    if (result != null) {
+      final co2 = (result['co2_kg'] as num?)?.toDouble() ?? 0.0;
+      final isEco = result['is_eco'] as bool? ?? false;
+      final coins = result['coins'] as int? ?? 5;
+      final items = (result['items'] as List?)?.cast<String>() ?? [];
+
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (_receiptImage != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(File(_receiptImage!.path), height: 80, width: 80, fit: BoxFit.cover),
+                  ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(result['merchant'] as String? ?? 'Receipt', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
+                      Text(result['category'] as String? ?? '', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            GlassCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Text('CO₂ Impact', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12)),
+                      const Spacer(),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: (isEco ? AppTheme.emerald : AppTheme.warning).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          isEco ? '✅ Eco Purchase' : '⚠️ Carbon Added',
+                          style: TextStyle(color: isEco ? AppTheme.emerald : AppTheme.warning, fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text('${co2.toStringAsFixed(3)} kg CO₂', style: const TextStyle(color: AppTheme.textPrimary, fontSize: 28, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(EmissionFactors.analogy(co2), style: const TextStyle(color: AppTheme.emerald, fontSize: 12)),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            if (items.isNotEmpty)
+              GlassCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Items Detected', style: TextStyle(color: AppTheme.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 8),
+                    ...items.map((item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          const Text('• ', style: TextStyle(color: AppTheme.emerald)),
+                          Expanded(child: Text(item, style: const TextStyle(color: AppTheme.textPrimary, fontSize: 13))),
+                        ],
+                      ),
+                    )),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 12),
+            if (result['insight'] != null)
+              GlassCard(
+                child: Row(
+                  children: [
+                    const Text('💡 ', style: TextStyle(fontSize: 16)),
+                    Expanded(
+                      child: Text(result['insight'] as String, style: const TextStyle(color: AppTheme.textSecondary, fontSize: 13, height: 1.4)),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 20),
+            GradientButton(
+              label: 'Log Activity  +$coins GreenCoins',
+              onPressed: _logReceiptActivity,
+              icon: Icons.check,
+              width: double.infinity,
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () => setState(() { _receiptImage = null; _receiptResult = null; }),
+              child: const Text('Scan another receipt', style: TextStyle(color: AppTheme.emerald)),
+            ),
+          ],
+        ),
+      );
+    }
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -268,20 +505,17 @@ class _LogActivityScreenState extends State<LogActivityScreen> with SingleTicker
               Container(
                 width: 80,
                 height: 80,
-                decoration: BoxDecoration(
-                  color: AppTheme.emerald.withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
+                decoration: BoxDecoration(color: AppTheme.emerald.withValues(alpha: 0.15), shape: BoxShape.circle),
                 child: const Icon(Icons.receipt_long, color: AppTheme.emerald, size: 40),
               ),
               const SizedBox(height: 20),
               const Text('Snap your receipt', style: TextStyle(color: AppTheme.textPrimary, fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 8),
-              const Text('We\'ll calculate your food & shopping carbon footprint automatically', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13), textAlign: TextAlign.center),
+              const Text('AI will read your bill and calculate your carbon footprint + award GreenCoins automatically', style: TextStyle(color: AppTheme.textSecondary, fontSize: 13), textAlign: TextAlign.center),
               const SizedBox(height: 24),
-              GradientButton(label: 'Take Photo', onPressed: () {}, icon: Icons.camera_alt, width: double.infinity),
+              GradientButton(label: 'Take Photo', onPressed: () => _pickAndScanReceipt(ImageSource.camera), icon: Icons.camera_alt, width: double.infinity),
               const SizedBox(height: 12),
-              TextButton(onPressed: () {}, child: const Text('Choose from Gallery', style: TextStyle(color: AppTheme.emerald))),
+              TextButton(onPressed: () => _pickAndScanReceipt(ImageSource.gallery), child: const Text('Choose from Gallery', style: TextStyle(color: AppTheme.emerald))),
             ],
           ),
         ),

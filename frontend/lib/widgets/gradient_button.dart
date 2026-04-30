@@ -68,12 +68,12 @@ class _GradientButtonState extends State<GradientButton> with SingleTickerProvid
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               if (widget.icon != null) ...[
-                Icon(widget.icon, color: Colors.white, size: 18),
+                Icon(widget.icon, color: AppTheme.bg1, size: 18),
                 const SizedBox(width: 8),
               ],
               Text(
                 widget.label,
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 15),
+                style: const TextStyle(color: AppTheme.bg1, fontWeight: FontWeight.w700, fontSize: 15),
               ),
             ],
           ),

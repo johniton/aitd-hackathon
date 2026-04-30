@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:geolocator/geolocator.dart';
 
@@ -39,8 +40,8 @@ const Map<TransportMode, double> _kgCo2ePerKm = {
 };
 
 // Speed thresholds inferred from GPS
-const double _walkMaxKmh = 7.0;    // 0–7 km/h → walking
-const double _cycleMaxKmh = 30.0;  // 7–30 km/h → cycling / e-scooter
+const double _walkMaxKmh = 7.0; // 0–7 km/h → walking
+const double _cycleMaxKmh = 30.0; // 7–30 km/h → cycling / e-scooter
 // > 30 km/h → automotive
 
 TransportMode _inferMode(double speedKmh) {
@@ -55,27 +56,36 @@ class MotionActivityService {
     required this.onCarbonEstimate,
     this.onModeChanged,
     this.minimumDistanceKm = 0.05,
-    this.emitIntervalSeconds = 30,
+    this.emitIntervalSeconds = 5,
+    this.isDemoMode = false,
   });
 
   final void Function(TransportCarbonEstimate estimate) onCarbonEstimate;
   final void Function(TransportMode mode, double speedKmh)? onModeChanged;
   final double minimumDistanceKm;
   final int emitIntervalSeconds;
+  final bool isDemoMode;
 
   TransportMode _currentMode = TransportMode.unknown;
   double _speedKmh = 0.0;
   double _accumulatedDistanceKm = 0.0;
   Position? _previousPosition;
+  DateTime? _previousTimestamp;
+  int _stationaryTicks = 0;
 
   StreamSubscription<Position>? _positionSubscription;
   Timer? _emitTimer;
+  Timer? _demoTimer;
+  final Random _rng = Random();
 
   double get currentSpeedKmh => _speedKmh;
   TransportMode get currentMode => _currentMode;
 
   Future<void> start() async {
-    if (kIsWeb) return;
+    if (isDemoMode || kIsWeb) {
+      _startDemoSimulation();
+      return;
+    }
 
     bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
     if (!serviceEnabled) return;
@@ -99,22 +109,66 @@ class MotionActivityService {
     });
   }
 
+  void _startDemoSimulation() {
+    _demoTimer?.cancel();
+    _currentMode = TransportMode.stationary;
+    _speedKmh = 0.0;
+    _demoTimer = Timer.periodic(Duration(seconds: emitIntervalSeconds), (_) {
+      final roll = _rng.nextInt(100);
+      if (roll < 20) {
+        _currentMode = TransportMode.walking;
+        _speedKmh = 3 + _rng.nextDouble() * 3;
+      } else if (roll < 35) {
+        _currentMode = TransportMode.cycling;
+        _speedKmh = 12 + _rng.nextDouble() * 12;
+      } else if (roll < 90) {
+        _currentMode = TransportMode.automotive;
+        _speedKmh = 15 + _rng.nextDouble() * 45;
+      } else {
+        _currentMode = TransportMode.stationary;
+        _speedKmh = 0;
+      }
+
+      final distanceKm = (_speedKmh / 3600.0) * emitIntervalSeconds;
+      _accumulatedDistanceKm = distanceKm;
+      onModeChanged?.call(_currentMode, _speedKmh);
+      _emitCurrentSegment();
+    });
+  }
+
   void _onPosition(Position position) {
-    final speedMs = position.speed.clamp(0.0, double.infinity).toDouble();
-    _speedKmh = speedMs * 3.6;
-
-    final newMode = _inferMode(_speedKmh);
-
-    if (_previousPosition != null) {
+    double inferredSpeedKmh = 0;
+    if (_previousPosition != null && _previousTimestamp != null) {
       final distanceM = Geolocator.distanceBetween(
         _previousPosition!.latitude,
         _previousPosition!.longitude,
         position.latitude,
         position.longitude,
       );
+      final dtS =
+          position.timestamp.difference(_previousTimestamp!).inMilliseconds /
+          1000.0;
+      if (dtS > 0) {
+        inferredSpeedKmh = (distanceM / dtS) * 3.6;
+      }
+      // If GPS jitter is tiny movement, treat as stationary.
+      if (distanceM < 3) {
+        _stationaryTicks += 1;
+      } else {
+        _stationaryTicks = 0;
+      }
       _accumulatedDistanceKm += distanceM / 1000.0;
     }
+    final reportedSpeedKmh =
+        position.speed.clamp(0.0, double.infinity).toDouble() * 3.6;
+    _speedKmh = inferredSpeedKmh > 0 ? inferredSpeedKmh : reportedSpeedKmh;
+    if (_stationaryTicks >= 2 || _speedKmh < 1.5) {
+      _speedKmh = 0;
+    }
+    final newMode = _inferMode(_speedKmh);
+
     _previousPosition = position;
+    _previousTimestamp = position.timestamp;
 
     if (newMode != _currentMode) {
       if (_accumulatedDistanceKm >= minimumDistanceKm) {
@@ -127,27 +181,34 @@ class MotionActivityService {
 
   void _emitCurrentSegment() {
     final dist = _accumulatedDistanceKm;
-    if (dist < minimumDistanceKm && _currentMode == TransportMode.stationary) return;
+    if (dist < minimumDistanceKm && _currentMode == TransportMode.stationary) {
+      return;
+    }
     final factor = _kgCo2ePerKm[_currentMode] ?? 0.0;
-    onCarbonEstimate(TransportCarbonEstimate(
-      kgCo2e: factor * dist,
-      distanceKm: dist,
-      mode: _currentMode,
-      speedKmh: _speedKmh,
-      calculatedAt: DateTime.now(),
-    ));
+    onCarbonEstimate(
+      TransportCarbonEstimate(
+        kgCo2e: factor * dist,
+        distanceKm: dist,
+        mode: _currentMode,
+        speedKmh: _speedKmh,
+        calculatedAt: DateTime.now(),
+      ),
+    );
     _accumulatedDistanceKm = 0.0;
   }
 
   void stop() {
     _positionSubscription?.cancel();
     _emitTimer?.cancel();
+    _demoTimer?.cancel();
     if (_accumulatedDistanceKm >= minimumDistanceKm) {
       _emitCurrentSegment();
     }
     _currentMode = TransportMode.unknown;
     _speedKmh = 0.0;
     _previousPosition = null;
+    _previousTimestamp = null;
+    _stationaryTicks = 0;
     _accumulatedDistanceKm = 0.0;
   }
 }

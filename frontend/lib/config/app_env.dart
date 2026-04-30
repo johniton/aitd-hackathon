@@ -10,4 +10,6 @@ class AppEnv {
   static String get openWeatherMapApiKey =>
       dotenv.env['OPENWEATHERMAP_API_KEY'] ?? '';
   static String get mapboxApiKey => dotenv.env['MAPBOX_API_KEY'] ?? '';
+  static String get sneakyApiUrl =>
+      dotenv.env['SNEAKY_API_URL'] ?? 'http://10.0.2.2:3000';
 }

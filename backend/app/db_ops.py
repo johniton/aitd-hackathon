@@ -55,6 +55,20 @@ def get_all_users_co2() -> list[dict]:
     return resp.data
 
 
+def get_user_location_rows() -> list[dict]:
+    """
+    Return location-bearing user rows for map density.
+    Prefers explicit latitude/longitude from Supabase users table.
+    """
+    try:
+        resp = _sb().table("users").select("city, latitude, longitude, green_coins").execute()
+        return resp.data
+    except Exception:
+        # Backward-compatible fallback if lat/lng columns are not yet migrated.
+        resp = _sb().table("users").select("city, green_coins").execute()
+        return resp.data
+
+
 # ═══════════════════════════════════════════════════════════════════
 # ACTIVITIES
 # ═══════════════════════════════════════════════════════════════════

@@ -71,7 +71,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                     const SizedBox(height: 32),
                     Container(
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.07),
+                        color: AppTheme.surface,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: TabBar(
@@ -80,7 +80,7 @@ class _AuthScreenState extends State<AuthScreen> with SingleTickerProviderStateM
                           color: AppTheme.emerald,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        labelColor: Colors.white,
+                        labelColor: AppTheme.bg1,
                         unselectedLabelColor: AppTheme.textSecondary,
                         labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
                         dividerColor: Colors.transparent,
@@ -171,7 +171,7 @@ class _LoginTabState extends State<_LoginTab> {
                     hintText: 'e.g. Priya Sharma',
                     hintStyle: TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.5)),
                     filled: true,
-                    fillColor: Colors.white.withValues(alpha: 0.07),
+                    fillColor: AppTheme.surface,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.2))),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.2))),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.emerald)),
@@ -186,13 +186,13 @@ class _LoginTabState extends State<_LoginTab> {
                   onPressed: _searching ? null : _search,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.emerald,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppTheme.bg1,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(horizontal: 18),
                   ),
                   child: _searching
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: AppTheme.bg1, strokeWidth: 2))
                       : const Icon(Icons.search),
                 ),
               ),
@@ -227,7 +227,7 @@ class _UserTile extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.07),
+          color: AppTheme.surface,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: AppTheme.emerald.withValues(alpha: 0.3)),
         ),
@@ -238,7 +238,7 @@ class _UserTile extends StatelessWidget {
               height: 44,
               decoration: const BoxDecoration(shape: BoxShape.circle, gradient: AppTheme.emeraldGradient),
               alignment: Alignment.center,
-              child: Text(user.avatarInitials, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w700)),
+              child: Text(user.avatarInitials, style: const TextStyle(color: AppTheme.bg1, fontSize: 15, fontWeight: FontWeight.w700)),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -320,12 +320,12 @@ class _RegisterTabState extends State<_RegisterTab> {
               onPressed: _loading ? null : _register,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppTheme.emerald,
-                foregroundColor: Colors.white,
+                foregroundColor: AppTheme.bg1,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 elevation: 0,
               ),
               child: _loading
-                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(color: AppTheme.bg1, strokeWidth: 2))
                   : const Text('Create Account', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
             ),
           ),
@@ -347,7 +347,7 @@ class _RegisterTabState extends State<_RegisterTab> {
             hintText: hint,
             hintStyle: TextStyle(color: AppTheme.textSecondary.withValues(alpha: 0.5)),
             filled: true,
-            fillColor: Colors.white.withValues(alpha: 0.07),
+            fillColor: AppTheme.surface,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.2))),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AppTheme.textSecondary.withValues(alpha: 0.2))),
             focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: AppTheme.emerald)),
