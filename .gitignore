@@ -76,3 +76,9 @@ app.*.map.json
 # Web related
 **/web/flutter_bootstrap.js
 
+# Node.js
+**/node_modules/
+
+# Python
+**/venv/
+**/__pycache__/
